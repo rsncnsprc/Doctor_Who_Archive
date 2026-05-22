@@ -9,14 +9,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
-// --- DATABASE CONNECTION ---
-// Update these credentials to match your PostgreSQL setup
+// database connection
 const pool = new Pool({
     host: 'localhost',
     port: 5432,
     database: 'doctor_who_database_final',
-    user: 'postgres',       // ← change to your postgres username
-    password: '31415' // ← change to your postgres password
+    user: 'postgres',
+    password: '31415'
 });
 
 // Test DB connection on startup
@@ -29,12 +28,9 @@ pool.connect((err, client, release) => {
     }
 });
 
-
-// ============================================================
-// GET /api/episodes  — used by index.html
+// GET /api/episodes
 // Returns all episodes with season/series info joined
-// Optional query params: ?doctor=10&season=1&min_rating=7&available=true&search=blink
-// ============================================================
+
 app.get('/api/episodes', async (req, res) => {
     try {
         const { doctor, season, min_rating, available, search } = req.query;
@@ -67,7 +63,7 @@ app.get('/api/episodes', async (req, res) => {
         let idx = 1;
 
         if (doctor) {
-            // Match episodes where doctor_num equals the value OR contains it (e.g. "1, 2, 3" matches doctor=1)
+            // Match episodes where doctor_num equals the value OR contains it
             query += ` AND (e.doctor_num = $${idx} OR e.doctor_num LIKE $${idx+1} OR e.doctor_num LIKE $${idx+2} OR e.doctor_num LIKE $${idx+3})`;
             params.push(doctor, `${doctor},%`, `%, ${doctor},%`, `%, ${doctor}`);
             idx += 4;
@@ -107,11 +103,9 @@ app.get('/api/episodes', async (req, res) => {
     }
 });
 
-
-// ============================================================
-// GET /api/episodes/:id  — used by episode.html
+// GET /api/episodes/:id
 // Returns a single episode's full details
-// ============================================================
+
 app.get('/api/episodes/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -152,10 +146,7 @@ app.get('/api/episodes/:id', async (req, res) => {
     }
 });
 
-
-// ============================================================
-// GET /api/doctors  — used to populate the filter dropdown
-// ============================================================
+// GET /api/doctors to populate the filter dropdown
 app.get('/api/doctors', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -170,10 +161,8 @@ app.get('/api/doctors', async (req, res) => {
     }
 });
 
+// GET /api/seasons to populate the season filter dropdown
 
-// ============================================================
-// GET /api/seasons  — used to populate the season filter dropdown
-// ============================================================
 app.get('/api/seasons', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -187,16 +176,13 @@ app.get('/api/seasons', async (req, res) => {
     }
 });
 
-
-// ============================================================
-// GET /api/filter-options  — returns doctors & seasons scoped to a series tab
+// GET /api/filter-options
 // Query param: ?tab=Classic|Modern|Spin-offs
-// ============================================================
+
 app.get('/api/filter-options', async (req, res) => {
     try {
         const { tab } = req.query;
 
-        // Build a WHERE clause that matches the same tab logic used client-side
         let seriesFilter = '';
         if (tab === 'Classic') {
             seriesFilter = `AND LOWER(sr.series_name) LIKE '%classic%'`;
@@ -206,8 +192,7 @@ app.get('/api/filter-options', async (req, res) => {
             seriesFilter = `AND LOWER(sr.series_name) NOT LIKE '%classic%' AND LOWER(sr.series_name) NOT LIKE '%modern%'`;
         }
 
-        // Distinct single-doctor values for the active tab
-        // Episodes with multiple doctors (e.g. "1, 2") are excluded from filter options
+        // exclude multiple doctor episodes from filter options
         const doctorsResult = await pool.query(`
             SELECT DISTINCT e.doctor_num
             FROM episodes e
@@ -219,7 +204,6 @@ app.get('/api/filter-options', async (req, res) => {
             ORDER BY e.doctor_num
         `);
 
-        // Distinct seasons for the active tab
         const seasonsResult = await pool.query(`
             SELECT DISTINCT se.season_number
             FROM seasons se
@@ -241,8 +225,6 @@ app.get('/api/filter-options', async (req, res) => {
     }
 });
 
-
-// Start server
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
