@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Who Archive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tardis-blue { background-color: #003b6f; }
+        .accent-gold { color: #d4af37; }
+        #filterPanel.hidden { display: none; }
+        input[type=range] { cursor: pointer; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-900">
+
+    <!-- Header Section -->
+    <header class="tardis-blue text-white py-10 px-6 shadow-xl relative">
+        <div class="absolute top-6 right-6">
+            <button onclick="navigateToProfile()" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition border border-white/30">
+                <span class="text-sm font-medium">My Profile</span>
+                <div class="w-8 h-8 bg-yellow-600 rounded-full flex items-center justify-center">👤</div>
+            </button>
+        </div>
+
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="text-4xl font-bold tracking-tighter italic mb-8 uppercase">Gallifrey<span class="accent-gold text-5xl">Archive</span></h1>
+            
+            <div class="flex flex-col items-center gap-4">
+                <div class="w-full flex gap-2">
+                    <div class="relative flex-1">
+                        <!-- CHANGED: added id="searchInput" and oninput handler -->
+                        <input type="text" id="searchInput" placeholder="Search episodes, villains, companions..." 
+                               class="w-full p-4 pl-12 rounded-full text-black shadow-inner focus:ring-4 focus:ring-blue-400 outline-none"
+                               oninput="debounceSearch()">
+                        <span class="absolute left-4 top-4 text-gray-400">🔍</span>
+                    </div>
+                    <button onclick="toggleFilters()" class="bg-blue-800 hover:bg-blue-700 px-6 py-4 rounded-full font-bold flex items-center gap-2 transition border border-blue-400 shadow-lg">
+                        <span>Filters</span>
+                        <svg id="arrow" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hidden Filter Panel -->
+    <div id="filterPanel" class="hidden bg-white border-b shadow-inner p-8">
+        <div class="max-w-5xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+                
+                <!-- Column 1: Navigation -->
+                <div>
+                    <label class="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">Era Selection</label>
+                    <div class="space-y-3">
+                        <!-- CHANGED: added id="doctorFilter" and onchange handler -->
+                        <select id="doctorFilter" onchange="applyFilters()" class="w-full p-3 bg-gray-50 border rounded-lg text-sm">
+                            <option value="">All Doctors</option>
+                            <!-- Populated dynamically by JS -->
+                        </select>
+                        <!-- CHANGED: added id="seasonFilter" and onchange handler -->
+                        <select id="seasonFilter" onchange="applyFilters()" class="w-full p-3 bg-gray-50 border rounded-lg text-sm">
+                            <option value="">All Seasons</option>
+                            <!-- Populated dynamically by JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Column 2: Specifics -->
+                <div>
+                    <label class="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">Episode Details</label>
+                    <div class="space-y-3">
+                        <!-- CHANGED: added id and oninput -->
+                        <input type="text" id="villainFilter" placeholder="Villains (e.g. Master)..." 
+                               class="w-full p-3 bg-gray-50 border rounded-lg text-sm" oninput="debounceSearch()">
+                        <input type="text" id="companionFilter" placeholder="Companions (e.g. Sarah Jane)..." 
+                               class="w-full p-3 bg-gray-50 border rounded-lg text-sm" oninput="debounceSearch()">
+                    </div>
+                </div>
+
+                <!-- Column 3: Quality & Scope -->
+                <div>
+                    <label class="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">Settings & Ratings</label>
+                    
+                    <div class="flex items-end gap-4 mb-4">
+                        <div class="flex-1">
+                            <div class="flex justify-between mb-1">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase">Min Rating</span>
+                                <span id="ratingDisplay" class="text-xs font-black text-blue-900">6.0+</span>
+                            </div>
+                            <!-- CHANGED: added onchange to trigger filter -->
+                            <input type="range" id="ratingSlider" min="1" max="9" step="0.5" value="6" 
+                                   oninput="updateRating(this.value)" onchange="applyFilters()" 
+                                   class="w-full accent-blue-900">
+                        </div>
+                    </div>
+
+                    <!-- CHANGED: radio buttons now have onchange handlers -->
+                    <div class="flex gap-4 pt-3 border-t">
+                        <label class="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="av" value="all" checked onchange="applyFilters()" class="accent-blue-900"> All
+                        </label>
+                        <label class="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="av" value="available" onchange="applyFilters()" class="accent-blue-900"> Available
+                        </label>
+                        <label class="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="av" value="lost" onchange="applyFilters()" class="accent-blue-900"> Lost
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav class="bg-white border-b sticky top-0 z-10 shadow-sm">
+        <div class="max-w-4xl mx-auto flex justify-around p-4 font-bold uppercase tracking-widest text-[11px]">
+            <!-- CHANGED: tabs now filter by series -->
+            <button id="tab-classic" onclick="setTab('Classic')" class="text-blue-900 border-b-2 border-blue-900 px-4 pb-1">Classic</button>
+            <button id="tab-modern"  onclick="setTab('Modern')"  class="text-gray-400 hover:text-blue-900 px-4 pb-1 transition">Modern</button>
+            <button id="tab-spinoff" onclick="setTab('New')" class="text-gray-400 hover:text-blue-900 px-4 pb-1 transition">New</button>
+        </div>
+    </nav>
+
+    <!-- Results Section -->
+    <main class="max-w-4xl mx-auto p-6">
+        <!-- CHANGED: episode count display added -->
+        <p id="episode-count" class="text-xs text-gray-400 font-bold uppercase mb-4"></p>
+        <div id="episode-list" class="space-y-4">
+            <p class="text-center text-gray-400 py-10">Loading episodes...</p>
+        </div>
+    </main>
+
+    <script>
+        const API = 'http://localhost:5000/api';
+        let currentTab = 'Classic';
+        let searchTimer = null;
+
+        // ── UI Helpers ──────────────────────────────────────────
+
+        function toggleFilters() {
+            const panel = document.getElementById('filterPanel');
+            const arrow = document.getElementById('arrow');
+            panel.classList.toggle('hidden');
+            arrow.style.transform = panel.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        }
+
+        function updateRating(val) {
+            document.getElementById('ratingDisplay').innerText = val + "+";
+        }
+
+        function setTab(tabName) {
+            currentTab = tabName;
+            ['Classic', 'Modern', 'New'].forEach(t => {
+                const btn = document.getElementById('tab-' + (t === 'New' ? 'spinoff' : t.toLowerCase()));
+                if (btn) {
+                    btn.className = t === tabName
+                        ? 'text-blue-900 border-b-2 border-blue-900 px-4 pb-1'
+                        : 'text-gray-400 hover:text-blue-900 px-4 pb-1 transition';
+                }
+            });
+            // Reset doctor/season selections when switching tabs, then reload options
+            document.getElementById('doctorFilter').value = '';
+            document.getElementById('seasonFilter').value = '';
+            loadFilterOptions().then(() => applyFilters());
+        }
+
+        function debounceSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(applyFilters, 350);
+        }
+
+        // ── Populate Filter Dropdowns (tab-aware) ────────────────
+        async function loadFilterOptions() {
+            try {
+                const data = await fetch(`${API}/filter-options?tab=${encodeURIComponent(currentTab)}`).then(r => r.json());
+
+                // Preserve current selections so we can restore them if still valid
+                const prevDoctor = document.getElementById('doctorFilter').value;
+                const prevSeason = document.getElementById('seasonFilter').value;
+
+                // Rebuild doctor dropdown
+                const doctorSel = document.getElementById('doctorFilter');
+                doctorSel.innerHTML = '<option value="">All Doctors</option>';
+                data.doctors.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = `Doctor ${d}`;
+                    doctorSel.appendChild(opt);
+                });
+                // Restore selection if still available
+                if (data.doctors.includes(prevDoctor)) doctorSel.value = prevDoctor;
+
+                // Rebuild season dropdown
+                const seasonSel = document.getElementById('seasonFilter');
+                seasonSel.innerHTML = '<option value="">All Seasons</option>';
+                data.seasons.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = `Season ${s}`;
+                    seasonSel.appendChild(opt);
+                });
+                // Restore selection if still available
+                if (data.seasons.map(String).includes(prevSeason)) seasonSel.value = prevSeason;
+
+            } catch (err) {
+                console.error('Failed to load filter options:', err);
+            }
+        }
+
+        // ── Main Data Fetch ──────────────────────────────────────
+
+        async function applyFilters() {
+            const container = document.getElementById('episode-list');
+            container.innerHTML = '<p class="text-center text-gray-400 py-10">Loading...</p>';
+
+            // Build query string from UI state
+            const params = new URLSearchParams();
+
+            const search = document.getElementById('searchInput').value.trim();
+            const villain = document.getElementById('villainFilter').value.trim();
+            const companion = document.getElementById('companionFilter').value.trim();
+            const doctor = document.getElementById('doctorFilter').value;
+            const season = document.getElementById('seasonFilter').value;
+            const rating = document.getElementById('ratingSlider').value;
+            const avail = document.querySelector('input[name="av"]:checked')?.value;
+
+            // Merge text searches into one param (server handles it)
+            const combinedSearch = [search, villain, companion].filter(Boolean).join(' ');
+            if (combinedSearch) params.append('search', combinedSearch);
+            if (doctor)         params.append('doctor', doctor);
+            if (season)         params.append('season', season);
+            if (rating)         params.append('min_rating', rating);
+            if (avail === 'available') params.append('available', 'true');
+            if (avail === 'lost')      params.append('available', 'false');
+
+            try {
+                let episodes = await fetch(`${API}/episodes?${params}`).then(r => r.json());
+
+                // Client-side tab filter by series_name
+                // Adjust these strings to match what's in your series table
+                if (currentTab === 'Classic') {
+                    episodes = episodes.filter(ep => ep.series_name && ep.series_name.toLowerCase().includes('classic'));
+                } else if (currentTab === 'Modern') {
+                    episodes = episodes.filter(ep => ep.series_name && ep.series_name.toLowerCase().includes('modern'));
+                } else if (currentTab === 'New') {
+                    episodes = episodes.filter(ep => ep.series_name && 
+                        !ep.series_name.toLowerCase().includes('classic') && 
+                        !ep.series_name.toLowerCase().includes('modern'));
+                }
+
+                document.getElementById('episode-count').textContent = `${episodes.length} episode${episodes.length !== 1 ? 's' : ''} found`;
+
+                if (episodes.length === 0) {
+                    container.innerHTML = '<p class="text-center text-gray-400 py-10">No episodes match your filters.</p>';
+                    return;
+                }
+
+                container.innerHTML = episodes.map(ep => `
+                    <div onclick="window.location.href='episode.html?id=${ep.episode_id}'" 
+                         class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex gap-6 hover:border-blue-300 transition cursor-pointer">
+                        <div class="w-12 h-12 bg-blue-50 text-blue-900 rounded-full flex items-center justify-center font-black flex-shrink-0 text-sm">
+                            ${ep.episode_id}
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <h2 class="text-xl font-bold">${ep.episode_title || 'Untitled'}</h2>
+                                <span class="text-yellow-600 font-bold text-sm">${ep.imdb_rating ? 'IMDb ' + ep.imdb_rating : ''}</span>
+                            </div>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase mb-3">
+                                ${ep.year_released || ''}${ep.doctor_num ? ' • Doctor: ' + ep.doctor_num : ''}${ep.season_number ? ' • Season ' + ep.season_number : ''}
+                                ${ep.is_missing ? ' • <span class="text-red-500">LOST EPISODE</span>' : ''}
+                            </p>
+                            <p class="text-sm text-gray-600 line-clamp-2">${ep.plot_summary || 'No summary available.'}</p>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error('Failed to fetch episodes:', err);
+                container.innerHTML = '<p class="text-center text-red-400 py-10"> Could not connect to the server. Make sure server.js is running on port 5000.</p>';
+            }
+        }
+
+        function navigateToProfile() {
+            window.location.href = 'profile.html';
+        }
+
+        // ── Init ─────────────────────────────────────────────────
+        window.onload = async () => {
+            await loadFilterOptions();
+            applyFilters();
+        };
+    </script>
+</body>
+</html>

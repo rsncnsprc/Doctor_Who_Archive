@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Episode View - Gallifrey Archive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tardis-blue { background-color: #003b6f; }
+        .accent-gold { color: #d4af37; }
+        .tag-pill { background: #f3f4f6; color: #374151; padding: 4px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; border: 1px solid #e5e7eb; }
+        .btn-action { transition: all 0.2s ease; }
+        .btn-action:hover { transform: scale(1.1); }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-900">
+
+    <!-- Header -->
+    <header class="tardis-blue text-white py-4 px-6 shadow-md">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <button onclick="history.back()" class="text-sm flex items-center gap-2 opacity-80 hover:opacity-100 transition">
+                ← Back to Archive
+            </button>
+            <h1 class="text-xl font-bold tracking-tighter italic uppercase cursor-pointer" onclick="window.location.href='index.html'">
+                Gallifrey<span class="accent-gold">Archive</span>
+            </h1>
+            <div class="w-8 h-8 bg-yellow-600 rounded-full flex items-center justify-center cursor-pointer" onclick="location.href='profile.html'">👤</div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left/Main Column -->
+        <div class="lg:col-span-2 space-y-8">
+            
+            <!-- Hero Title Area -->
+            <section class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div>
+                    <!-- CHANGED: populated by JS -->
+                    <div id="ep-meta" class="flex items-center gap-3 text-xs font-black text-blue-900 uppercase tracking-widest mb-2">
+                        Loading...
+                    </div>
+                    <h2 id="ep-title" class="text-5xl font-black text-gray-900">...</h2>
+                </div>
+                
+                <!-- Interaction Buttons -->
+                <div class="flex gap-3">
+                    <button class="btn-action bg-white border border-gray-200 p-3 rounded-full shadow-sm text-red-500 hover:bg-red-50" title="Favourite">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                    </button>
+                    <button class="btn-action bg-white border border-gray-200 p-3 rounded-full shadow-sm text-blue-900 hover:bg-blue-50" title="Add to List">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Plot Summary Card -->
+            <section class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest">Plot Summary</h3>
+                    <!-- CHANGED: rating populated by JS -->
+                    <span id="ep-rating" class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg font-bold text-sm"></span>
+                </div>
+                <!-- CHANGED: plot populated by JS -->
+                <p id="ep-plot" class="text-lg leading-relaxed text-gray-700 whitespace-pre-line break-words">Loading...</p>
+                <!-- Settings Tags -->
+                <div class="mt-8 pt-6 border-t border-gray-100">
+                    <h4 class="text-[10px] font-black text-gray-400 uppercase mb-3">Settings & Locations</h4>
+                    <!-- CHANGED: tags populated by JS -->
+                    <div id="ep-settings" class="flex flex-wrap gap-2"></div>
+                </div>
+
+
+            </section>
+
+
+        </div>
+
+        <!-- Right Column: Availability -->
+        <div class="space-y-6">
+            
+            <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="tardis-blue p-4 text-white">
+                    <h3 class="font-bold flex items-center justify-between text-sm">
+                        Streaming Passport 
+                        <span class="text-[9px] bg-white/20 px-2 py-1 rounded uppercase tracking-tighter">Automatic Location</span>
+                    </h3>
+                </div>
+                <div class="p-6 space-y-5">
+                    
+                    <!-- Option 1 -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <p class="text-[10px] font-bold text-green-600 uppercase">Available Locally (UK)</p>
+                        </div>
+                        <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-[10px] text-white font-bold">iP</div>
+                                <span class="text-sm font-semibold">BBC iPlayer</span>
+                            </div>
+                            <span class="text-xs font-black text-blue-900">FREE</span>
+                        </div>
+                    </div>
+
+                    <!-- Option 2 -->
+                    <div>
+                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">Global Streaming</p>
+                        <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100 opacity-75">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-[10px] text-white font-bold">D+</div>
+                                <span class="text-sm font-semibold">Disney+</span>
+                            </div>
+                            <span class="text-xs font-black text-gray-900">$13.99/mo</span>
+                        </div>
+                        <p class="text-[9px] text-orange-600 mt-2 font-bold uppercase"> VPN Required</p>
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-100">
+                        <p class="text-[9px] text-gray-400 italic text-center">
+                            Streaming data is based on your current IP address. 
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Episode Status Widget — CHANGED: driven by is_missing field -->
+            <div class="bg-gray-100 p-6 rounded-2xl">
+                <h4 class="text-[10px] font-black text-gray-500 uppercase mb-3 text-center">Episode Status</h4>
+                <div id="ep-status" class="p-2 rounded-lg text-center text-xs font-black">
+                    Loading...
+                </div>
+            </div>
+
+            <!-- Extra Info Widget -->
+            <div id="ep-extra" class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3 hidden">
+                <h4 class="text-[10px] font-black text-gray-500 uppercase mb-1">Episode Info</h4>
+                <div id="ep-extra-content" class="space-y-2 text-sm text-gray-700"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        const API = 'http://localhost:5000/api';
+
+        // Get episode ID from URL: episode.html?id=42
+        function getEpisodeId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        // Render comma-separated string as tag pills
+        function renderTags(containerId, value) {
+            const el = document.getElementById(containerId);
+            if (!value || !el) return;
+            const tags = value.split(',').map(t => t.trim()).filter(Boolean);
+            el.innerHTML = tags.map(t => `<span class="tag-pill">${t}</span>`).join('');
+        }
+
+        async function loadEpisode() {
+            const id = getEpisodeId();
+            if (!id) {
+                document.getElementById('ep-title').textContent = 'Episode not found';
+                return;
+            }
+
+            try {
+                const ep = await fetch(`${API}/episodes/${id}`).then(r => {
+                    if (!r.ok) throw new Error('Not found');
+                    return r.json();
+                });
+
+                // Update page title
+                document.title = `${ep.episode_title} - Gallifrey Archive`;
+
+                // Meta line: Season • Episode • Year
+                document.getElementById('ep-meta').innerHTML = [
+                    ep.season_number ? `Season ${ep.season_number}` : null,
+                    ep.episode_id    ? `Episode ${ep.episode_id}`   : null,
+                    ep.year_released ? ep.year_released              : null
+                ].filter(Boolean).join(' <span class="opacity-40">•</span> ');
+
+                // Title
+                document.getElementById('ep-title').textContent = ep.episode_title || 'Untitled';
+
+                // IMDb rating
+                const ratingEl = document.getElementById('ep-rating');
+                ratingEl.textContent = ep.imdb_rating ? `⭐ ${ep.imdb_rating} IMDb` : '';
+
+                // Plot
+                document.getElementById('ep-plot').textContent = ep.plot_summary || 'No summary available.';
+
+                // Setting tags
+                if (ep.setting) {
+                    renderTags('ep-settings', ep.setting);
+                }
+
+                // Episode status
+                const statusEl = document.getElementById('ep-status');
+                if (ep.is_missing) {
+                    statusEl.className = 'bg-red-100 text-red-800 p-2 rounded-lg text-center text-xs font-black';
+                    statusEl.textContent = 'LOST EPISODE';
+                } else {
+                    statusEl.className = 'bg-green-100 text-green-800 p-2 rounded-lg text-center text-xs font-black';
+                    statusEl.textContent = 'FULL EPISODE AVAILABLE';
+                }
+
+                // Extra info panel
+                const extras = [];
+                if (ep.doctor_num)   extras.push({ label: 'Doctor',     value: ep.doctor_num });
+                if (ep.story_title)  extras.push({ label: 'Story',      value: ep.story_title });
+                if (ep.series_name)  extras.push({ label: 'Series',     value: ep.series_name });
+                if (ep.episode_identifier) extras.push({ label: 'ID',   value: ep.episode_identifier });
+
+                if (extras.length) {
+                    document.getElementById('ep-extra').classList.remove('hidden');
+                    document.getElementById('ep-extra-content').innerHTML = extras.map(e =>
+                        `<div class="flex justify-between">
+                            <span class="text-[10px] font-black text-gray-400 uppercase">${e.label}</span>
+                            <span class="font-semibold">${e.value}</span>
+                        </div>`
+                    ).join('');
+                }
+
+            } catch (err) {
+                console.error('Failed to load episode:', err);
+                document.getElementById('ep-title').textContent = 'Could not load episode';
+                document.getElementById('ep-plot').textContent = 'Make sure server.js is running on port 5000.';
+            }
+        }
+
+        window.onload = loadEpisode;
+    </script>
+</body>
+</html>
