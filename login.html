@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Gallifrey Archive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tardis-blue    { background-color: #003b6f; }
+        .tardis-blue-lg { background: linear-gradient(135deg, #002a52 0%, #003b6f 50%, #004f96 100%); }
+        .accent-gold    { color: #d4af37; }
+        .border-gold    { border-color: #d4af37; }
+        .bg-gold        { background-color: #d4af37; }
+
+        /* Subtle hexagon/time-vortex background */
+        body {
+            background-color: #f8fafc;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(0,59,111,0.06) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(212,175,55,0.08) 0%, transparent 40%);
+        }
+
+        /* Animated form card entrance */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .card-enter { animation: slideUp 0.4s ease both; }
+
+        /* Tab underline animation */
+        .tab-indicator {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 2px;
+            background: #003b6f;
+            transition: transform 0.25s ease, width 0.25s ease;
+        }
+
+        /* Input focus ring matches brand */
+        .field:focus {
+            outline: none;
+            border-color: #003b6f;
+            box-shadow: 0 0 0 3px rgba(0, 59, 111, 0.12);
+        }
+
+        /* Error shake */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%       { transform: translateX(-6px); }
+            40%       { transform: translateX(6px); }
+            60%       { transform: translateX(-4px); }
+            80%       { transform: translateX(4px); }
+        }
+        .shake { animation: shake 0.4s ease; }
+
+        /* Password strength bar */
+        .strength-bar { transition: width 0.3s ease, background-color 0.3s ease; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="tardis-blue text-white py-5 px-6 shadow-lg">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+            <h1 onclick="location.href='index.html'"
+                class="text-2xl font-bold tracking-tighter italic cursor-pointer uppercase select-none">
+                Gallifrey<span class="accent-gold text-3xl">Archive</span>
+            </h1>
+            <button onclick="continueAsGuest()"
+                class="text-sm bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition border border-white/30">
+                Browse as Guest →
+            </button>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-1 flex items-center justify-center p-6">
+        <div class="w-full max-w-md card-enter">
+
+            <!-- Logo mark -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 tardis-blue rounded-2xl shadow-lg mb-4">
+                    <span class="text-2xl">🌀</span>
+                </div>
+                <p class="text-gray-500 text-sm">Your personal Time Lord database</p>
+            </div>
+
+            <!-- Card -->
+            <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
+
+                <!-- Tabs -->
+                <div class="relative flex border-b border-gray-100">
+                    <button id="tab-login" onclick="switchMode('login')"
+                        class="flex-1 py-4 text-sm font-bold text-blue-900 tracking-wide transition">
+                        Sign In
+                    </button>
+                    <button id="tab-register" onclick="switchMode('register')"
+                        class="flex-1 py-4 text-sm font-bold text-gray-400 tracking-wide transition">
+                        Create Account
+                    </button>
+                    <!-- Sliding underline -->
+                    <div id="tab-line" class="tab-indicator" style="width:50%; transform:translateX(0%)"></div>
+                </div>
+
+                <div class="p-8">
+
+                    <!-- ── Error / Success banner ── -->
+                    <div id="banner" class="hidden mb-5 px-4 py-3 rounded-lg text-sm font-semibold"></div>
+
+                    <!-- ── LOGIN FORM ── -->
+                    <div id="form-login">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                                    Username or Email
+                                </label>
+                                <input id="login-identifier" type="text"
+                                    placeholder="e.g. Time_Traveller_42 or you@mail.com"
+                                    class="field w-full px-4 py-3 rounded-xl border border-gray-200 text-sm transition bg-gray-50"
+                                    onkeydown="if(event.key==='Enter') submitLogin()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                                    Password
+                                </label>
+                                <div class="relative">
+                                    <input id="login-password" type="password"
+                                        placeholder="••••••••"
+                                        class="field w-full px-4 py-3 rounded-xl border border-gray-200 text-sm transition bg-gray-50 pr-12"
+                                        onkeydown="if(event.key==='Enter') submitLogin()">
+                                    <button type="button" onclick="toggleVisibility('login-password', this)"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold select-none">
+                                        SHOW
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="btn-login" onclick="submitLogin()"
+                            class="mt-6 w-full tardis-blue text-white py-3 rounded-xl font-bold text-sm tracking-wide hover:opacity-90 transition active:scale-[0.98]">
+                            Sign In
+                        </button>
+
+                        <p class="text-center text-xs text-gray-400 mt-4">
+                            No account yet?
+                            <button onclick="switchMode('register')" class="text-blue-900 font-bold hover:underline">Create one →</button>
+                        </p>
+                    </div>
+
+                    <!-- ── REGISTER FORM ── -->
+                    <div id="form-register" class="hidden">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                                    Username
+                                </label>
+                                <input id="reg-username" type="text"
+                                    placeholder="Time_Traveller_42"
+                                    class="field w-full px-4 py-3 rounded-xl border border-gray-200 text-sm transition bg-gray-50"
+                                    oninput="clearBanner()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                                    Email Address
+                                </label>
+                                <input id="reg-email" type="email"
+                                    placeholder="you@example.com"
+                                    class="field w-full px-4 py-3 rounded-xl border border-gray-200 text-sm transition bg-gray-50"
+                                    oninput="clearBanner()">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                                    Password
+                                </label>
+                                <div class="relative">
+                                    <input id="reg-password" type="password"
+                                        placeholder="Min. 8 characters"
+                                        class="field w-full px-4 py-3 rounded-xl border border-gray-200 text-sm transition bg-gray-50 pr-12"
+                                        oninput="updateStrength(this.value)">
+                                    <button type="button" onclick="toggleVisibility('reg-password', this)"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold select-none">
+                                        SHOW
+                                    </button>
+                                </div>
+                                <!-- Password strength indicator -->
+                                <div class="mt-2 h-1 bg-gray-100 rounded-full overflow-hidden">
+                                    <div id="strength-bar" class="strength-bar h-full w-0 rounded-full bg-red-400"></div>
+                                </div>
+                                <p id="strength-label" class="text-[10px] text-gray-400 mt-1"></p>
+                            </div>
+                        </div>
+
+                        <button id="btn-register" onclick="submitRegister()"
+                            class="mt-6 w-full tardis-blue text-white py-3 rounded-xl font-bold text-sm tracking-wide hover:opacity-90 transition active:scale-[0.98]">
+                            Create Account
+                        </button>
+
+                        <p class="text-center text-xs text-gray-400 mt-4">
+                            Already have one?
+                            <button onclick="switchMode('login')" class="text-blue-900 font-bold hover:underline">Sign in →</button>
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Guest option -->
+            <div class="mt-6 text-center">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="flex-1 h-px bg-gray-200"></div>
+                    <span class="text-xs text-gray-400 font-bold uppercase tracking-widest">or</span>
+                    <div class="flex-1 h-px bg-gray-200"></div>
+                </div>
+                <button onclick="continueAsGuest()"
+                    class="w-full max-w-md py-3 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-500
+                           hover:border-blue-200 hover:text-blue-900 hover:bg-blue-50 transition active:scale-[0.98]">
+                    👤 Continue as Guest
+                    <span class="block text-[10px] font-normal text-gray-400 mt-0.5">Browse the archive without an account</span>
+                </button>
+            </div>
+
+            <!-- What you get with an account -->
+            <div class="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-5">
+                <p class="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">With an account you'll get</p>
+                <ul class="space-y-2 text-xs text-blue-800">
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Save episodes to custom playlists</li>
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Write personal notes on episodes</li>
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Track which episodes you've watched</li>
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Your own Gallifrey Archive profile</li>
+                </ul>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        const API = 'http://localhost:5000/api';
+        let currentMode = 'login';
+
+        // ── Tab switching ────────────────────────────────────────
+        function switchMode(mode) {
+            currentMode = mode;
+            clearBanner();
+
+            document.getElementById('form-login').classList.toggle('hidden', mode !== 'login');
+            document.getElementById('form-register').classList.toggle('hidden', mode !== 'register');
+
+            const loginTab    = document.getElementById('tab-login');
+            const registerTab = document.getElementById('tab-register');
+            const line        = document.getElementById('tab-line');
+
+            if (mode === 'login') {
+                loginTab.className    = 'flex-1 py-4 text-sm font-bold text-blue-900 tracking-wide transition';
+                registerTab.className = 'flex-1 py-4 text-sm font-bold text-gray-400 tracking-wide transition';
+                line.style.transform  = 'translateX(0%)';
+            } else {
+                loginTab.className    = 'flex-1 py-4 text-sm font-bold text-gray-400 tracking-wide transition';
+                registerTab.className = 'flex-1 py-4 text-sm font-bold text-blue-900 tracking-wide transition';
+                line.style.transform  = 'translateX(100%)';
+            }
+        }
+
+        // ── Banner helpers ───────────────────────────────────────
+        function showError(msg) {
+            const b = document.getElementById('banner');
+            b.textContent = msg;
+            b.className = 'mb-5 px-4 py-3 rounded-lg text-sm font-semibold bg-red-50 text-red-700 border border-red-200';
+            b.classList.remove('hidden');
+            b.classList.add('shake');
+            setTimeout(() => b.classList.remove('shake'), 500);
+        }
+
+        function showSuccess(msg) {
+            const b = document.getElementById('banner');
+            b.textContent = msg;
+            b.className = 'mb-5 px-4 py-3 rounded-lg text-sm font-semibold bg-green-50 text-green-700 border border-green-200';
+            b.classList.remove('hidden');
+        }
+
+        function clearBanner() {
+            const b = document.getElementById('banner');
+            b.classList.add('hidden');
+        }
+
+        // ── Button loading state ─────────────────────────────────
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            btn.disabled = loading;
+            btn.style.opacity = loading ? '0.6' : '';
+            btn.textContent = loading ? 'Please wait...' : (btnId === 'btn-login' ? 'Sign In' : 'Create Account');
+        }
+
+        // ── Password visibility toggle ───────────────────────────
+        function toggleVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const isText = input.type === 'text';
+            input.type = isText ? 'password' : 'text';
+            btn.textContent = isText ? 'SHOW' : 'HIDE';
+        }
+
+        // ── Password strength ────────────────────────────────────
+        function updateStrength(value) {
+            const bar = document.getElementById('strength-bar');
+            const label = document.getElementById('strength-label');
+            if (!value) { bar.style.width = '0'; label.textContent = ''; return; }
+
+            let score = 0;
+            if (value.length >= 8)  score++;
+            if (value.length >= 12) score++;
+            if (/[A-Z]/.test(value)) score++;
+            if (/[0-9]/.test(value)) score++;
+            if (/[^A-Za-z0-9]/.test(value)) score++;
+
+            const levels = [
+                { w: '20%',  color: '#ef4444', text: 'Too short' },
+                { w: '40%',  color: '#f97316', text: 'Weak' },
+                { w: '60%',  color: '#eab308', text: 'Fair' },
+                { w: '80%',  color: '#22c55e', text: 'Good' },
+                { w: '100%', color: '#16a34a', text: 'Strong ✓' },
+            ];
+            const level = levels[Math.min(score, 4)];
+            bar.style.width = level.w;
+            bar.style.backgroundColor = level.color;
+            label.textContent = level.text;
+            label.style.color = level.color;
+        }
+
+        // ── Session helpers ──────────────────────────────────────
+        function saveSession(token, user) {
+            localStorage.setItem('ga_token', token);
+            localStorage.setItem('ga_user', JSON.stringify(user));
+        }
+
+        function getRedirect() {
+            // If they were sent here from a protected page, go back there
+            const params = new URLSearchParams(window.location.search);
+            return params.get('redirect') || 'index.html';
+        }
+
+        // ── Submit login ─────────────────────────────────────────
+        async function submitLogin() {
+            const identifier = document.getElementById('login-identifier').value.trim();
+            const password   = document.getElementById('login-password').value;
+
+            if (!identifier || !password) {
+                showError('Please fill in both fields.');
+                return;
+            }
+
+            setLoading('btn-login', true);
+            clearBanner();
+
+            try {
+                const res  = await fetch(`${API}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier, password })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.error || 'Login failed');
+                    return;
+                }
+
+                saveSession(data.token, data.user);
+                showSuccess(`Welcome back, ${data.user.username}! Redirecting...`);
+                setTimeout(() => window.location.href = getRedirect(), 900);
+
+            } catch {
+                showError('Could not reach the server. Is server.js running?');
+            } finally {
+                setLoading('btn-login', false);
+            }
+        }
+
+        // ── Submit register ──────────────────────────────────────
+        async function submitRegister() {
+            const username = document.getElementById('reg-username').value.trim();
+            const email    = document.getElementById('reg-email').value.trim();
+            const password = document.getElementById('reg-password').value;
+
+            if (!username || !email || !password) {
+                showError('Please fill in all three fields.');
+                return;
+            }
+
+            setLoading('btn-register', true);
+            clearBanner();
+
+            try {
+                const res  = await fetch(`${API}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.error || 'Registration failed');
+                    return;
+                }
+
+                saveSession(data.token, data.user);
+                showSuccess(`Account created! Welcome, ${data.user.username}! Redirecting...`);
+                setTimeout(() => window.location.href = getRedirect(), 900);
+
+            } catch {
+                showError('Could not reach the server. Is server.js running?');
+            } finally {
+                setLoading('btn-register', false);
+            }
+        }
+
+        // ── Guest ────────────────────────────────────────────────
+        function continueAsGuest() {
+            localStorage.removeItem('ga_token');
+            localStorage.removeItem('ga_user');
+            window.location.href = 'index.html';
+        }
+
+        // ── On load: if already logged in, skip this page ────────
+        window.onload = () => {
+            const token = localStorage.getItem('ga_token');
+            if (token) {
+                // Silently verify token is still valid
+                fetch(`${API}/auth/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).then(r => {
+                    if (r.ok) window.location.href = getRedirect();
+                }).catch(() => {});
+            }
+        };
+    </script>
+</body>
+</html>
