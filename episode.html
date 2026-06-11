@@ -11,9 +11,39 @@
         .tag-pill { background: #f3f4f6; color: #374151; padding: 4px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; border: 1px solid #e5e7eb; }
         .btn-action { transition: all 0.2s ease; }
         .btn-action:hover { transform: scale(1.1); }
+        .btn-active-fav { background: #fef2f2 !important; border-color: #fecaca !important; }
+        .btn-active-fav svg { fill: #ef4444; stroke: #ef4444; }
+
+        /* Playlist dropdown */
+        #playlist-dropdown { display: none; }
+        #playlist-dropdown.open { display: block; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: #1f2937; color: white; padding: 10px 20px; border-radius: 999px;
+            font-size: 0.8rem; font-weight: 600; opacity: 0;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: none; z-index: 9999; white-space: nowrap;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* Notes section */
+        #notes-section textarea {
+            resize: vertical;
+            min-height: 96px;
+            font-family: inherit;
+        }
+        .note-saved-badge {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
+
+    <!-- Toast -->
+    <div id="toast"></div>
 
     <!-- Header -->
     <header class="tardis-blue text-white py-4 px-6 shadow-md">
@@ -36,7 +66,6 @@
             <!-- Hero Title Area -->
             <section class="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                    <!-- CHANGED: populated by JS -->
                     <div id="ep-meta" class="flex items-center gap-3 text-xs font-black text-blue-900 uppercase tracking-widest mb-2">
                         Loading...
                     </div>
@@ -44,17 +73,38 @@
                 </div>
                 
                 <!-- Interaction Buttons -->
-                <div class="flex gap-3">
-                    <button class="btn-action bg-white border border-gray-200 p-3 rounded-full shadow-sm text-red-500 hover:bg-red-50" title="Favourite">
+                <div class="flex gap-3 relative">
+                    <!-- Favourite Button -->
+                    <button id="btn-fav" class="btn-action bg-white border border-gray-200 p-3 rounded-full shadow-sm text-red-500 hover:bg-red-50" 
+                            title="Favourite" onclick="toggleFavourite()">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                         </svg>
                     </button>
-                    <button class="btn-action bg-white border border-gray-200 p-3 rounded-full shadow-sm text-blue-900 hover:bg-blue-50" title="Add to List">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
+
+                    <!-- Add to Playlist Button + Dropdown -->
+                    <div class="relative">
+                        <button id="btn-playlist" class="btn-action bg-white border border-gray-200 p-3 rounded-full shadow-sm text-blue-900 hover:bg-blue-50" 
+                                title="Add to Playlist" onclick="togglePlaylistDropdown(event)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+                        <!-- Playlist Dropdown -->
+                        <div id="playlist-dropdown" class="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                            <div class="p-3 border-b border-gray-100">
+                                <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Add to Playlist</p>
+                            </div>
+                            <div id="playlist-list" class="max-h-48 overflow-y-auto">
+                                <p class="text-sm text-gray-400 p-4 text-center">Loading...</p>
+                            </div>
+                            <div class="p-3 border-t border-gray-100">
+                                <button onclick="openCreatePlaylistModal()" class="w-full text-xs font-black text-blue-900 hover:text-blue-700 py-1 text-left flex items-center gap-2">
+                                    <span class="text-lg leading-none">+</span> New Playlist
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -62,21 +112,39 @@
             <section class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest">Plot Summary</h3>
-                    <!-- CHANGED: rating populated by JS -->
                     <span id="ep-rating" class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg font-bold text-sm"></span>
                 </div>
-                <!-- CHANGED: plot populated by JS -->
                 <p id="ep-plot" class="text-lg leading-relaxed text-gray-700 whitespace-pre-line break-words">Loading...</p>
-                <!-- Settings Tags -->
                 <div class="mt-8 pt-6 border-t border-gray-100">
                     <h4 class="text-[10px] font-black text-gray-400 uppercase mb-3">Settings & Locations</h4>
-                    <!-- CHANGED: tags populated by JS -->
                     <div id="ep-settings" class="flex flex-wrap gap-2"></div>
                 </div>
-
-
             </section>
 
+            <!-- Notes Section -->
+            <section id="notes-section" class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest">My Note</h3>
+                    <span id="note-status" class="text-[10px] font-bold text-gray-400 uppercase"></span>
+                </div>
+                <div id="notes-login-prompt" class="hidden text-center py-4">
+                    <p class="text-sm text-gray-400 mb-3">Sign in to write notes on episodes</p>
+                    <button onclick="location.href='login.html'" class="text-xs font-black text-blue-900 hover:underline">Sign In →</button>
+                </div>
+                <div id="notes-editor" class="hidden">
+                    <textarea id="note-textarea" 
+                        class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
+                        placeholder="Write your thoughts on this episode..."></textarea>
+                    <div class="flex justify-between items-center mt-3">
+                        <button id="btn-delete-note" onclick="deleteNote()" class="hidden text-[10px] font-black text-red-500 hover:text-red-700 uppercase">Delete Note</button>
+                        <div class="flex gap-3 ml-auto">
+                            <button onclick="saveNote()" class="tardis-blue text-white px-5 py-2 rounded-full text-xs font-black hover:opacity-90 transition">
+                                Save Note
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
         </div>
 
@@ -91,8 +159,6 @@
                     </h3>
                 </div>
                 <div class="p-6 space-y-5">
-                    
-                    <!-- Option 1 -->
                     <div>
                         <div class="flex justify-between items-center mb-2">
                             <p class="text-[10px] font-bold text-green-600 uppercase">Available Locally (UK)</p>
@@ -105,8 +171,6 @@
                             <span class="text-xs font-black text-blue-900">FREE</span>
                         </div>
                     </div>
-
-                    <!-- Option 2 -->
                     <div>
                         <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">Global Streaming</p>
                         <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100 opacity-75">
@@ -116,9 +180,8 @@
                             </div>
                             <span class="text-xs font-black text-gray-900">$13.99/mo</span>
                         </div>
-                        <p class="text-[9px] text-orange-600 mt-2 font-bold uppercase"> VPN Required</p>
+                        <p class="text-[9px] text-orange-600 mt-2 font-bold uppercase">VPN Required</p>
                     </div>
-
                     <div class="pt-4 border-t border-gray-100">
                         <p class="text-[9px] text-gray-400 italic text-center">
                             Streaming data is based on your current IP address. 
@@ -127,7 +190,7 @@
                 </div>
             </div>
 
-            <!-- Episode Status Widget — CHANGED: driven by is_missing field -->
+            <!-- Episode Status Widget -->
             <div class="bg-gray-100 p-6 rounded-2xl">
                 <h4 class="text-[10px] font-black text-gray-500 uppercase mb-3 text-center">Episode Status</h4>
                 <div id="ep-status" class="p-2 rounded-lg text-center text-xs font-black">
@@ -144,16 +207,55 @@
         </div>
     </main>
 
+    <!-- Create Playlist Modal -->
+    <div id="modal-create-playlist" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <h3 class="text-lg font-black text-blue-900 mb-6">New Playlist</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Name</label>
+                    <input id="new-playlist-name" type="text" maxlength="100"
+                        placeholder="e.g. Dalek Marathon"
+                        class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description <span class="font-normal normal-case">(optional)</span></label>
+                    <textarea id="new-playlist-desc" rows="2" maxlength="300"
+                        placeholder="A short description of this list..."
+                        class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition resize-none"></textarea>
+                </div>
+                <div id="modal-error" class="hidden text-xs text-red-600 font-semibold"></div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeCreatePlaylistModal()" class="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancel</button>
+                <button onclick="createPlaylistAndAdd()" class="flex-1 py-3 tardis-blue text-white rounded-xl text-sm font-bold hover:opacity-90 transition">Create & Add</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = 'http://localhost:5000/api';
+        let currentEpisodeId = null;
 
-        // Get episode ID from URL: episode.html?id=42
-        function getEpisodeId() {
-            const params = new URLSearchParams(window.location.search);
-            return params.get('id');
+        // ── Helpers ────────────────────────────────────────────────────
+        function getToken() { return localStorage.getItem('ga_token'); }
+        function isLoggedIn() { return !!getToken(); }
+
+        function authHeaders() {
+            return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
         }
 
-        // Render comma-separated string as tag pills
+        function showToast(msg, duration = 2500) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), duration);
+        }
+
+        function getEpisodeId() {
+            return new URLSearchParams(window.location.search).get('id');
+        }
+
         function renderTags(containerId, value) {
             const el = document.getElementById(containerId);
             if (!value || !el) return;
@@ -161,12 +263,220 @@
             el.innerHTML = tags.map(t => `<span class="tag-pill">${t}</span>`).join('');
         }
 
+        // ── Favourite ──────────────────────────────────────────────────
+        let isFavourited = false;
+
+        async function loadFavouriteState() {
+            if (!isLoggedIn()) return;
+            try {
+                const ids = await fetch(`${API}/favourites/ids`, { headers: authHeaders() }).then(r => r.json());
+                isFavourited = ids.includes(parseInt(currentEpisodeId));
+                updateFavBtn();
+            } catch {}
+        }
+
+        function updateFavBtn() {
+            const btn = document.getElementById('btn-fav');
+            if (isFavourited) {
+                btn.classList.add('btn-active-fav');
+                btn.title = 'Remove from Favourites';
+            } else {
+                btn.classList.remove('btn-active-fav');
+                btn.title = 'Add to Favourites';
+            }
+        }
+
+        async function toggleFavourite() {
+            if (!isLoggedIn()) {
+                window.location.href = `login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+                return;
+            }
+            try {
+                const res = await fetch(`${API}/favourites/${currentEpisodeId}`, {
+                    method: 'POST',
+                    headers: authHeaders()
+                }).then(r => r.json());
+                isFavourited = res.favourited;
+                updateFavBtn();
+                showToast(isFavourited ? '❤️ Added to Favourites' : 'Removed from Favourites');
+            } catch {
+                showToast('Could not update favourites');
+            }
+        }
+
+        // ── Playlist Dropdown ──────────────────────────────────────────
+        let playlistDropdownOpen = false;
+
+        function togglePlaylistDropdown(e) {
+            e.stopPropagation();
+            if (!isLoggedIn()) {
+                window.location.href = `login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+                return;
+            }
+            playlistDropdownOpen = !playlistDropdownOpen;
+            const dd = document.getElementById('playlist-dropdown');
+            dd.classList.toggle('open', playlistDropdownOpen);
+            if (playlistDropdownOpen) loadPlaylistDropdown();
+        }
+
+        document.addEventListener('click', () => {
+            playlistDropdownOpen = false;
+            document.getElementById('playlist-dropdown').classList.remove('open');
+        });
+
+        async function loadPlaylistDropdown() {
+            const container = document.getElementById('playlist-list');
+            container.innerHTML = '<p class="text-sm text-gray-400 p-4 text-center">Loading...</p>';
+            try {
+                const playlists = await fetch(`${API}/playlists/episode/${currentEpisodeId}`, {
+                    headers: authHeaders()
+                }).then(r => r.json());
+
+                if (playlists.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-gray-400 p-4 text-center">No playlists yet</p>';
+                    return;
+                }
+
+                container.innerHTML = playlists.map(pl => `
+                    <label class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition">
+                        <input type="checkbox" 
+                            class="rounded accent-blue-900 w-4 h-4"
+                            ${pl.has_episode ? 'checked' : ''}
+                            onchange="toggleEpisodeInPlaylist(${pl.playlist_id}, this.checked, '${pl.name.replace(/'/g, "\\'")}')">
+                        <span class="text-sm font-semibold text-gray-700 flex-1">${pl.name}</span>
+                    </label>
+                `).join('');
+            } catch {
+                container.innerHTML = '<p class="text-xs text-red-400 p-4 text-center">Failed to load playlists</p>';
+            }
+        }
+
+        async function toggleEpisodeInPlaylist(playlistId, add, playlistName) {
+            try {
+                if (add) {
+                    await fetch(`${API}/playlists/${playlistId}/episodes/${currentEpisodeId}`, {
+                        method: 'POST', headers: authHeaders()
+                    });
+                    showToast(`✓ Added to "${playlistName}"`);
+                } else {
+                    await fetch(`${API}/playlists/${playlistId}/episodes/${currentEpisodeId}`, {
+                        method: 'DELETE', headers: authHeaders()
+                    });
+                    showToast(`Removed from "${playlistName}"`);
+                }
+            } catch {
+                showToast('Could not update playlist');
+            }
+        }
+
+        // ── Create Playlist Modal ──────────────────────────────────────
+        function openCreatePlaylistModal() {
+            playlistDropdownOpen = false;
+            document.getElementById('playlist-dropdown').classList.remove('open');
+            document.getElementById('new-playlist-name').value = '';
+            document.getElementById('new-playlist-desc').value = '';
+            document.getElementById('modal-error').classList.add('hidden');
+            document.getElementById('modal-create-playlist').classList.remove('hidden');
+            setTimeout(() => document.getElementById('new-playlist-name').focus(), 50);
+        }
+
+        function closeCreatePlaylistModal() {
+            document.getElementById('modal-create-playlist').classList.add('hidden');
+        }
+
+        async function createPlaylistAndAdd() {
+            const name = document.getElementById('new-playlist-name').value.trim();
+            const desc = document.getElementById('new-playlist-desc').value.trim();
+            const errEl = document.getElementById('modal-error');
+
+            if (!name) {
+                errEl.textContent = 'Please enter a playlist name.';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const pl = await fetch(`${API}/playlists`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ name, description: desc || null })
+                }).then(r => r.json());
+
+                if (pl.error) { errEl.textContent = pl.error; errEl.classList.remove('hidden'); return; }
+
+                // Add current episode to the new playlist
+                await fetch(`${API}/playlists/${pl.playlist_id}/episodes/${currentEpisodeId}`, {
+                    method: 'POST', headers: authHeaders()
+                });
+
+                closeCreatePlaylistModal();
+                showToast(`✓ Created "${name}" and added episode`);
+            } catch {
+                errEl.textContent = 'Failed to create playlist. Is the server running?';
+                errEl.classList.remove('hidden');
+            }
+        }
+
+        // ── Notes ──────────────────────────────────────────────────────
+        async function loadNote() {
+            if (!isLoggedIn()) {
+                document.getElementById('notes-login-prompt').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('notes-editor').classList.remove('hidden');
+            try {
+                const note = await fetch(`${API}/notes/${currentEpisodeId}`, {
+                    headers: authHeaders()
+                }).then(r => r.json());
+
+                if (note && note.note_text) {
+                    document.getElementById('note-textarea').value = note.note_text;
+                    document.getElementById('note-status').textContent = `Last saved ${new Date(note.updated_at).toLocaleDateString()}`;
+                    document.getElementById('btn-delete-note').classList.remove('hidden');
+                }
+            } catch {}
+        }
+
+        async function saveNote() {
+            const text = document.getElementById('note-textarea').value.trim();
+            if (!text) { showToast('Note is empty — nothing to save'); return; }
+            try {
+                const note = await fetch(`${API}/notes/${currentEpisodeId}`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ note_text: text })
+                }).then(r => r.json());
+                document.getElementById('note-status').textContent = `Saved ${new Date(note.updated_at).toLocaleDateString()}`;
+                document.getElementById('btn-delete-note').classList.remove('hidden');
+                showToast('✓ Note saved');
+            } catch {
+                showToast('Could not save note');
+            }
+        }
+
+        async function deleteNote() {
+            if (!confirm('Delete this note?')) return;
+            try {
+                await fetch(`${API}/notes/${currentEpisodeId}`, {
+                    method: 'DELETE', headers: authHeaders()
+                });
+                document.getElementById('note-textarea').value = '';
+                document.getElementById('note-status').textContent = '';
+                document.getElementById('btn-delete-note').classList.add('hidden');
+                showToast('Note deleted');
+            } catch {
+                showToast('Could not delete note');
+            }
+        }
+
+        // ── Load Episode ────────────────────────────────────────────────
         async function loadEpisode() {
             const id = getEpisodeId();
             if (!id) {
                 document.getElementById('ep-title').textContent = 'Episode not found';
                 return;
             }
+            currentEpisodeId = id;
 
             try {
                 const ep = await fetch(`${API}/episodes/${id}`).then(r => {
@@ -174,32 +484,23 @@
                     return r.json();
                 });
 
-                // Update page title
                 document.title = `${ep.episode_title} - Gallifrey Archive`;
 
-                // Meta line: Season • Episode • Year
                 document.getElementById('ep-meta').innerHTML = [
                     ep.season_number ? `Season ${ep.season_number}` : null,
                     ep.episode_id    ? `Episode ${ep.episode_id}`   : null,
                     ep.year_released ? ep.year_released              : null
                 ].filter(Boolean).join(' <span class="opacity-40">•</span> ');
 
-                // Title
                 document.getElementById('ep-title').textContent = ep.episode_title || 'Untitled';
 
-                // IMDb rating
                 const ratingEl = document.getElementById('ep-rating');
                 ratingEl.textContent = ep.imdb_rating ? `⭐ ${ep.imdb_rating} IMDb` : '';
 
-                // Plot
                 document.getElementById('ep-plot').textContent = ep.plot_summary || 'No summary available.';
 
-                // Setting tags
-                if (ep.setting) {
-                    renderTags('ep-settings', ep.setting);
-                }
+                if (ep.setting) renderTags('ep-settings', ep.setting);
 
-                // Episode status
                 const statusEl = document.getElementById('ep-status');
                 if (ep.is_missing) {
                     statusEl.className = 'bg-red-100 text-red-800 p-2 rounded-lg text-center text-xs font-black';
@@ -209,12 +510,11 @@
                     statusEl.textContent = 'FULL EPISODE AVAILABLE';
                 }
 
-                // Extra info panel
                 const extras = [];
-                if (ep.doctor_num)   extras.push({ label: 'Doctor',     value: ep.doctor_num });
-                if (ep.story_title)  extras.push({ label: 'Story',      value: ep.story_title });
-                if (ep.series_name)  extras.push({ label: 'Series',     value: ep.series_name });
-                if (ep.episode_identifier) extras.push({ label: 'ID',   value: ep.episode_identifier });
+                if (ep.doctor_num)   extras.push({ label: 'Doctor',  value: ep.doctor_num });
+                if (ep.story_title)  extras.push({ label: 'Story',   value: ep.story_title });
+                if (ep.series_name)  extras.push({ label: 'Series',  value: ep.series_name });
+                if (ep.episode_identifier) extras.push({ label: 'ID', value: ep.episode_identifier });
 
                 if (extras.length) {
                     document.getElementById('ep-extra').classList.remove('hidden');
@@ -226,12 +526,20 @@
                     ).join('');
                 }
 
+                // Load user-specific data in parallel
+                await Promise.all([loadFavouriteState(), loadNote()]);
+
             } catch (err) {
                 console.error('Failed to load episode:', err);
                 document.getElementById('ep-title').textContent = 'Could not load episode';
                 document.getElementById('ep-plot').textContent = 'Make sure server.js is running on port 5000.';
             }
         }
+
+        // Close modal on backdrop click
+        document.getElementById('modal-create-playlist').addEventListener('click', function(e) {
+            if (e.target === this) closeCreatePlaylistModal();
+        });
 
         window.onload = loadEpisode;
     </script>

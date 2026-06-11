@@ -9,115 +9,682 @@
         .tardis-blue { background-color: #003b6f; }
         .accent-gold { color: #d4af37; }
         .tab-active { border-bottom: 2px solid #003b6f; color: #003b6f; font-weight: bold; }
-        .hidden { display: none; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: #1f2937; color: white; padding: 10px 20px; border-radius: 999px;
+            font-size: 0.8rem; font-weight: 600; opacity: 0;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: none; z-index: 9999; white-space: nowrap;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* Modal backdrop */
+        .modal-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50; padding: 1rem;
+        }
+        .modal-backdrop.hidden { display: none; }
+
+        /* Skeleton shimmer */
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 400px 100%;
+            animation: shimmer 1.2s infinite;
+            border-radius: 6px;
+        }
+
+        /* Playlist expanded panel */
+        .playlist-episodes { display: none; }
+        .playlist-episodes.open { display: block; }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
 
+    <div id="toast"></div>
+
     <!-- Header -->
-    <header class="tardis-blue text-white py-6 px-6 shadow-xl relative">
+    <header class="tardis-blue text-white py-6 px-6 shadow-xl">
         <div class="max-w-5xl mx-auto flex justify-between items-center">
             <h1 onclick="location.href='index.html'" class="text-2xl font-bold tracking-tighter italic cursor-pointer uppercase">
                 Gallifrey<span class="accent-gold text-3xl">Archive</span>
             </h1>
-            <button onclick="location.href='index.html'" class="text-sm bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition border border-white/30">
-                ← Back to Archive
-            </button>
+            <div class="flex items-center gap-3">
+                <button onclick="location.href='index.html'" class="text-sm bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition border border-white/30">
+                    ← Back to Archive
+                </button>
+                <button onclick="doLogout()" class="text-sm bg-white/10 hover:bg-red-500/40 px-4 py-2 rounded-full transition border border-white/20">
+                    Sign Out
+                </button>
+            </div>
         </div>
     </header>
 
     <main class="max-w-5xl mx-auto p-6">
-        
-        <!-- User Info Header -->
-        <div class="bg-white rounded-xl shadow-sm p-8 mb-8 flex flex-col md:flex-row items-center gap-6 border border-gray-200">
-            <div class="w-24 h-24 bg-yellow-600 rounded-full flex items-center justify-center text-4xl shadow-inner">👤</div>
-            <div class="text-center md:text-left flex-1">
-                <h2 class="text-3xl font-black text-blue-900">Time_Traveller_42</h2>
-                <p class="text-gray-500">Member since May 2026</p>
-                <div class="flex gap-4 mt-4">
-                    <div class="bg-blue-50 px-4 py-1 rounded-full text-xs font-bold text-blue-800">0 Episodes Watched</div>
-                    <div class="bg-green-50 px-4 py-1 rounded-full text-xs font-bold text-green-800">1 Playlists</div>
-                </div>
-            </div>
+
+        <!-- Not logged in state -->
+        <div id="not-logged-in" class="hidden text-center py-24">
+            <div class="text-5xl mb-4">🔒</div>
+            <h2 class="text-xl font-black text-blue-900 mb-2">Sign in to view your profile</h2>
+            <p class="text-gray-400 mb-6 text-sm">Your favourites, playlists and notes are waiting.</p>
+            <button onclick="location.href='login.html?redirect=profile.html'" class="tardis-blue text-white px-6 py-3 rounded-xl font-bold text-sm hover:opacity-90 transition">
+                Sign In →
+            </button>
         </div>
 
-        <!-- Profile Tabs -->
-        <div class="flex border-b border-gray-200 mb-8 overflow-x-auto">
-            <button onclick="switchTab('playlists')" id="tab-playlists" class="px-8 py-4 tab-active whitespace-nowrap">Playlists & Favorites</button>
-            <button onclick="switchTab('notes')" id="tab-notes" class="px-8 py-4 text-gray-400 whitespace-nowrap">Personal Notes</button>
-            <button onclick="switchTab('stats')" id="tab-stats" class="px-8 py-4 text-gray-400 whitespace-nowrap">Watch Stats</button>
-        </div>
+        <!-- Profile content (shown when logged in) -->
+        <div id="profile-content" class="hidden">
 
-        <!-- PLAYLISTS SECTION -->
-        <div id="content-playlists" class="space-y-6">
-            <div class="flex justify-between items-center">
-                <h3 class="text-xl font-bold">My Custom Lists</h3>
-                <button class="bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold">+ New Playlist</button>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Favorites Card -->
-                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
-                    <h4 class="font-black text-blue-900 mb-1">❤️ Favorites</h4>
-                    <p class="text-xs text-gray-400 mb-4 uppercase font-bold">12 Episodes</p>
-                    <div class="flex -space-x-2 overflow-hidden">
-                        <div class="inline-block h-8 w-8 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-[10px]">E1</div>
-                        <div class="inline-block h-8 w-8 rounded-full bg-blue-200 border-2 border-white flex items-center justify-center text-[10px]">E4</div>
-                        <div class="inline-block h-8 w-8 rounded-full bg-blue-300 border-2 border-white flex items-center justify-center text-[10px]">E9</div>
-                    </div>
-                </div>
-                <!-- Custom List Card -->
-                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer">
-                    <h4 class="font-black text-blue-900 mb-1">Dalek Marathon</h4>
-                    <p class="text-xs text-gray-400 mb-4 uppercase font-bold">5 Episodes</p>
-                    <p class="text-sm text-gray-500 italic">"Favourite episodes with the Daleks"</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- NOTES SECTION -->
-        <div id="content-notes" class="hidden">
-            <!-- Filter Bar for Notes -->
-            <div class="bg-gray-100 p-4 rounded-xl mb-6 flex flex-wrap gap-4 items-center">
-                <span class="text-xs font-black text-gray-500 uppercase">Filter Notes:</span>
-                <select class="bg-white border p-2 rounded text-sm"><option>All Shows</option><option>Classic</option><option>Modern</option></select>
-                <select class="bg-white border p-2 rounded text-sm"><option>All Seasons</option><option>Season 1</option></select>
-                <input type="text" placeholder="Search keywords in notes..." class="flex-1 p-2 rounded border text-sm">
-            </div>
-
-            <div class="space-y-4">
-                <div class="bg-white p-6 rounded-xl border border-gray-200">
-                    <div class="flex justify-between items-start mb-2">
-                        <h4 class="font-bold text-blue-900">An Unearthly Child (E1)</h4>
-                        <span class="text-[10px] text-gray-400">MAY 01, 2026</span>
-                    </div>
-                    <p class="text-sm bg-blue-50 p-4 rounded-lg text-gray-700 italic border-l-4 border-blue-900">
-                        "Need to check if the 2026 remaster fixed the audio levels in the second half."
-                    </p>
-                    <div class="flex gap-2 mt-4">
-                        <button class="text-[10px] uppercase font-black text-blue-900">Edit Note</button>
-                        <button class="text-[10px] uppercase font-black text-red-600">Delete</button>
+            <!-- User Info Header -->
+            <div class="bg-white rounded-xl shadow-sm p-8 mb-8 flex flex-col md:flex-row items-center gap-6 border border-gray-200">
+                <div id="avatar" class="w-24 h-24 tardis-blue rounded-full flex items-center justify-center text-4xl font-black text-white shadow-inner">?</div>
+                <div class="text-center md:text-left flex-1">
+                    <h2 id="profile-username" class="text-3xl font-black text-blue-900">Loading...</h2>
+                    <p id="profile-since" class="text-gray-400 text-sm mt-1">Member since...</p>
+                    <div class="flex gap-3 mt-4 flex-wrap justify-center md:justify-start">
+                        <div id="stat-favourites" class="bg-red-50 px-4 py-1 rounded-full text-xs font-bold text-red-700">— Favourites</div>
+                        <div id="stat-playlists"  class="bg-blue-50 px-4 py-1 rounded-full text-xs font-bold text-blue-800">— Playlists</div>
+                        <div id="stat-notes"      class="bg-yellow-50 px-4 py-1 rounded-full text-xs font-bold text-yellow-700">— Notes</div>
                     </div>
                 </div>
             </div>
-        </div>
 
+            <!-- Profile Tabs -->
+            <div class="flex border-b border-gray-200 mb-8 overflow-x-auto">
+                <button onclick="switchTab('favourites')" id="tab-favourites" class="px-8 py-4 tab-active whitespace-nowrap">❤️ Favourites</button>
+                <button onclick="switchTab('playlists')"  id="tab-playlists"  class="px-8 py-4 text-gray-400 whitespace-nowrap">Playlists</button>
+                <button onclick="switchTab('notes')"      id="tab-notes"      class="px-8 py-4 text-gray-400 whitespace-nowrap">Notes</button>
+            </div>
+
+            <!-- ═══ FAVOURITES TAB ═══ -->
+            <div id="content-favourites">
+                <div id="favourites-loading" class="space-y-3">
+                    <div class="skeleton h-20 w-full"></div>
+                    <div class="skeleton h-20 w-full"></div>
+                    <div class="skeleton h-20 w-full"></div>
+                </div>
+                <div id="favourites-empty" class="hidden text-center py-16">
+                    <div class="text-4xl mb-3">💔</div>
+                    <p class="font-bold text-gray-500">No favourites yet</p>
+                    <p class="text-sm text-gray-400 mt-1">Hit the ❤️ button on any episode to save it here.</p>
+                </div>
+                <div id="favourites-list" class="hidden space-y-3"></div>
+            </div>
+
+            <!-- ═══ PLAYLISTS TAB ═══ -->
+            <div id="content-playlists" class="hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold">My Playlists</h3>
+                    <button onclick="openCreatePlaylistModal()" class="tardis-blue text-white px-4 py-2 rounded-lg text-sm font-bold hover:opacity-90 transition">+ New Playlist</button>
+                </div>
+                <div id="playlists-loading" class="space-y-3">
+                    <div class="skeleton h-24 w-full"></div>
+                    <div class="skeleton h-24 w-full"></div>
+                </div>
+                <div id="playlists-empty" class="hidden text-center py-16">
+                    <div class="text-4xl mb-3">📋</div>
+                    <p class="font-bold text-gray-500">No playlists yet</p>
+                    <p class="text-sm text-gray-400 mt-1">Create a playlist to organise episodes your way.</p>
+                </div>
+                <div id="playlists-list" class="hidden space-y-4"></div>
+            </div>
+
+            <!-- ═══ NOTES TAB ═══ -->
+            <div id="content-notes" class="hidden">
+                <!-- Filter bar -->
+                <div class="bg-gray-100 p-4 rounded-xl mb-6 flex flex-wrap gap-3 items-center">
+                    <span class="text-xs font-black text-gray-500 uppercase">Search:</span>
+                    <input type="text" id="notes-search" placeholder="Search your notes..." 
+                        oninput="filterNotes()"
+                        class="flex-1 p-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:border-blue-400 transition min-w-[200px]">
+                </div>
+                <div id="notes-loading" class="space-y-3">
+                    <div class="skeleton h-28 w-full"></div>
+                    <div class="skeleton h-28 w-full"></div>
+                </div>
+                <div id="notes-empty" class="hidden text-center py-16">
+                    <div class="text-4xl mb-3">📝</div>
+                    <p class="font-bold text-gray-500">No notes yet</p>
+                    <p class="text-sm text-gray-400 mt-1">Open any episode and write your thoughts in the notes section.</p>
+                </div>
+                <div id="notes-list" class="hidden space-y-4"></div>
+            </div>
+
+        </div>
     </main>
 
+    <!-- ── Create Playlist Modal ── -->
+    <div id="modal-create-playlist" class="modal-backdrop hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <h3 class="text-lg font-black text-blue-900 mb-6">New Playlist</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Name</label>
+                    <input id="new-playlist-name" type="text" maxlength="100"
+                        placeholder="e.g. Dalek Marathon"
+                        class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description <span class="font-normal normal-case">(optional)</span></label>
+                    <textarea id="new-playlist-desc" rows="2" maxlength="300"
+                        placeholder="A short description..."
+                        class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition resize-none"></textarea>
+                </div>
+                <div id="modal-pl-error" class="hidden text-xs text-red-600 font-semibold"></div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeCreatePlaylistModal()" class="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancel</button>
+                <button onclick="submitCreatePlaylist()" class="flex-1 py-3 tardis-blue text-white rounded-xl text-sm font-bold hover:opacity-90 transition">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Delete Playlist Confirm Modal ── -->
+    <div id="modal-delete-playlist" class="modal-backdrop hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+            <div class="text-4xl mb-4">🗑️</div>
+            <h3 class="text-lg font-black text-gray-900 mb-2">Delete Playlist?</h3>
+            <p id="delete-playlist-name" class="text-sm text-gray-500 mb-6"></p>
+            <div class="flex gap-3">
+                <button onclick="closeDeletePlaylistModal()" class="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancel</button>
+                <button onclick="confirmDeletePlaylist()" class="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Edit Note Modal ── -->
+    <div id="modal-edit-note" class="modal-backdrop hidden">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8">
+            <h3 id="edit-note-title" class="text-lg font-black text-blue-900 mb-4">Edit Note</h3>
+            <textarea id="edit-note-text" rows="5"
+                class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition resize-vertical"></textarea>
+            <div class="flex gap-3 mt-5">
+                <button onclick="closeEditNoteModal()" class="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Cancel</button>
+                <button onclick="saveEditedNote()" class="flex-1 py-3 tardis-blue text-white rounded-xl text-sm font-bold hover:opacity-90 transition">Save Note</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        function switchTab(tabName) {
-            // Hide all content
-            document.getElementById('content-playlists').classList.add('hidden');
-            document.getElementById('content-notes').classList.add('hidden');
-            
-            // Remove active style from all buttons
-            document.getElementById('tab-playlists').className = 'px-8 py-4 text-gray-400 whitespace-nowrap';
-            document.getElementById('tab-notes').className = 'px-8 py-4 text-gray-400 whitespace-nowrap';
-            
-            // Show selected content and style active button
-            document.getElementById('content-' + tabName).classList.remove('hidden');
-            document.getElementById('tab-' + tabName).className = 'px-8 py-4 tab-active whitespace-nowrap';
+        const API = 'http://localhost:5000/api';
+
+        // ── Auth helpers ──────────────────────────────────────────────
+        function getToken() { return localStorage.getItem('ga_token'); }
+        function getUser()  {
+            try { return JSON.parse(localStorage.getItem('ga_user')); } catch { return null; }
         }
+        function authHeaders() {
+            return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
+        }
+        function doLogout() {
+            localStorage.removeItem('ga_token');
+            localStorage.removeItem('ga_user');
+            window.location.href = 'login.html';
+        }
+
+        // ── Toast ─────────────────────────────────────────────────────
+        function showToast(msg, duration = 2500) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), duration);
+        }
+
+        // ── Tab switching ─────────────────────────────────────────────
+        const TABS = ['favourites', 'playlists', 'notes'];
+        function switchTab(name) {
+            TABS.forEach(t => {
+                document.getElementById('content-' + t).classList.add('hidden');
+                document.getElementById('tab-' + t).className = 'px-8 py-4 text-gray-400 whitespace-nowrap';
+            });
+            document.getElementById('content-' + name).classList.remove('hidden');
+            document.getElementById('tab-' + name).className = 'px-8 py-4 tab-active whitespace-nowrap';
+        }
+
+        // ── Render helpers ────────────────────────────────────────────
+        function episodeLabel(ep) {
+            const parts = [];
+            if (ep.season_number) parts.push(`S${ep.season_number}`);
+            if (ep.year_released) parts.push(ep.year_released);
+            if (ep.doctor_num)    parts.push(`Doctor ${ep.doctor_num}`);
+            return parts.join(' · ');
+        }
+
+        function ratingBadge(ep) {
+            return ep.imdb_rating
+                ? `<span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-[10px] font-black">⭐ ${ep.imdb_rating}</span>`
+                : '';
+        }
+
+        function missingBadge(ep) {
+            return ep.is_missing
+                ? `<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black">LOST</span>`
+                : '';
+        }
+
+        // ── Load profile data ─────────────────────────────────────────
+        let allNotes = [];  // cache for filtering
+
+        async function loadProfile() {
+            const token = getToken();
+            if (!token) {
+                document.getElementById('not-logged-in').classList.remove('hidden');
+                return;
+            }
+
+            // Verify token is still valid
+            try {
+                const meRes = await fetch(`${API}/auth/me`, { headers: authHeaders() });
+                if (!meRes.ok) throw new Error('invalid token');
+            } catch {
+                doLogout();
+                return;
+            }
+
+            document.getElementById('profile-content').classList.remove('hidden');
+
+            const user = getUser();
+            if (user) {
+                document.getElementById('profile-username').textContent = user.username;
+                document.getElementById('avatar').textContent = user.username.charAt(0).toUpperCase();
+                const since = new Date(user.created_at);
+                document.getElementById('profile-since').textContent =
+                    `Member since ${since.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}`;
+            }
+
+            // Load all three in parallel
+            await Promise.all([loadFavourites(), loadPlaylists(), loadNotes()]);
+        }
+
+        // ── FAVOURITES ────────────────────────────────────────────────
+        async function loadFavourites() {
+            try {
+                const favs = await fetch(`${API}/favourites`, { headers: authHeaders() }).then(r => r.json());
+
+                document.getElementById('favourites-loading').classList.add('hidden');
+                document.getElementById('stat-favourites').textContent = `${favs.length} Favourite${favs.length !== 1 ? 's' : ''}`;
+
+                if (favs.length === 0) {
+                    document.getElementById('favourites-empty').classList.remove('hidden');
+                    return;
+                }
+
+                const list = document.getElementById('favourites-list');
+                list.classList.remove('hidden');
+                list.innerHTML = favs.map(ep => `
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 hover:shadow-md transition group">
+                        <div class="flex-1 min-w-0">
+                            <a href="episode.html?id=${ep.episode_id}" class="font-black text-blue-900 hover:underline text-base leading-tight block truncate">
+                                ${ep.episode_title}
+                            </a>
+                            <p class="text-xs text-gray-400 mt-1 font-semibold">${episodeLabel(ep)}</p>
+                            <div class="flex gap-2 mt-2">${ratingBadge(ep)}${missingBadge(ep)}</div>
+                        </div>
+                        <button onclick="removeFavourite(${ep.episode_id}, this)"
+                            class="text-red-400 hover:text-red-600 transition p-2 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100 flex-shrink-0"
+                            title="Remove from favourites">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                            </svg>
+                        </button>
+                    </div>
+                `).join('');
+            } catch {
+                document.getElementById('favourites-loading').classList.add('hidden');
+                document.getElementById('favourites-list').classList.remove('hidden');
+                document.getElementById('favourites-list').innerHTML = '<p class="text-sm text-red-500 text-center py-8">Could not load favourites. Is the server running?</p>';
+            }
+        }
+
+        async function removeFavourite(episodeId, btn) {
+            try {
+                await fetch(`${API}/favourites/${episodeId}`, { method: 'POST', headers: authHeaders() });
+                const card = btn.closest('div.bg-white');
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                card.style.transition = 'all 0.2s ease';
+                setTimeout(() => { card.remove(); updateFavCount(); }, 220);
+                showToast('Removed from favourites');
+            } catch {
+                showToast('Could not remove favourite');
+            }
+        }
+
+        function updateFavCount() {
+            const count = document.getElementById('favourites-list').querySelectorAll('.bg-white').length;
+            document.getElementById('stat-favourites').textContent = `${count} Favourite${count !== 1 ? 's' : ''}`;
+            if (count === 0) {
+                document.getElementById('favourites-list').classList.add('hidden');
+                document.getElementById('favourites-empty').classList.remove('hidden');
+            }
+        }
+
+        // ── PLAYLISTS ─────────────────────────────────────────────────
+        let deletePlaylistId = null;
+
+        async function loadPlaylists() {
+            try {
+                const pls = await fetch(`${API}/playlists`, { headers: authHeaders() }).then(r => r.json());
+
+                document.getElementById('playlists-loading').classList.add('hidden');
+                document.getElementById('stat-playlists').textContent = `${pls.length} Playlist${pls.length !== 1 ? 's' : ''}`;
+
+                if (pls.length === 0) {
+                    document.getElementById('playlists-empty').classList.remove('hidden');
+                    return;
+                }
+
+                const list = document.getElementById('playlists-list');
+                list.classList.remove('hidden');
+                renderPlaylists(pls);
+            } catch {
+                document.getElementById('playlists-loading').classList.add('hidden');
+                document.getElementById('playlists-list').classList.remove('hidden');
+                document.getElementById('playlists-list').innerHTML = '<p class="text-sm text-red-500 text-center py-8">Could not load playlists.</p>';
+            }
+        }
+
+        function renderPlaylists(pls) {
+            const list = document.getElementById('playlists-list');
+            list.innerHTML = pls.map(pl => `
+                <div class="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="p-5 flex items-center gap-4 cursor-pointer hover:bg-gray-50 transition"
+                         onclick="togglePlaylistEpisodes(${pl.playlist_id})">
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-black text-blue-900 text-base">${pl.name}</h4>
+                            ${pl.description ? `<p class="text-sm text-gray-500 italic mt-0.5 truncate">"${pl.description}"</p>` : ''}
+                            <p class="text-xs text-gray-400 font-bold mt-1 uppercase">${pl.episode_count} Episode${pl.episode_count != 1 ? 's' : ''}</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button onclick="event.stopPropagation(); openDeletePlaylistModal(${pl.playlist_id}, '${pl.name.replace(/'/g, "\\'")}')"
+                                class="text-gray-300 hover:text-red-500 transition p-1 rounded"
+                                title="Delete playlist">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                            <svg id="pl-chevron-${pl.playlist_id}" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-300 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Episodes panel -->
+                    <div id="pl-episodes-${pl.playlist_id}" class="playlist-episodes border-t border-gray-100">
+                        <div class="p-3 text-center text-sm text-gray-400">Loading...</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        const openPlaylistPanels = new Set();
+
+        async function togglePlaylistEpisodes(playlistId) {
+            const panel = document.getElementById(`pl-episodes-${playlistId}`);
+            const chevron = document.getElementById(`pl-chevron-${playlistId}`);
+
+            if (openPlaylistPanels.has(playlistId)) {
+                openPlaylistPanels.delete(playlistId);
+                panel.classList.remove('open');
+                chevron.style.transform = 'rotate(0deg)';
+                return;
+            }
+
+            openPlaylistPanels.add(playlistId);
+            panel.classList.add('open');
+            chevron.style.transform = 'rotate(180deg)';
+
+            // Load episodes for this playlist
+            try {
+                const data = await fetch(`${API}/playlists/${playlistId}`, { headers: authHeaders() }).then(r => r.json());
+                if (!data.episodes || data.episodes.length === 0) {
+                    panel.innerHTML = '<p class="text-sm text-gray-400 text-center py-5">No episodes in this playlist yet.</p>';
+                    return;
+                }
+                panel.innerHTML = `<div class="divide-y divide-gray-50">${data.episodes.map(ep => `
+                    <div class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition group">
+                        <a href="episode.html?id=${ep.episode_id}" class="flex-1 min-w-0">
+                            <span class="font-semibold text-sm text-gray-800 hover:text-blue-900 hover:underline block truncate">${ep.episode_title}</span>
+                            <span class="text-xs text-gray-400">${episodeLabel(ep)}</span>
+                        </a>
+                        ${ratingBadge(ep)}
+                        <button onclick="removeFromPlaylist(${playlistId}, ${ep.episode_id}, this)"
+                            class="text-gray-200 hover:text-red-400 transition opacity-0 group-hover:opacity-100 p-1"
+                            title="Remove from playlist">×</button>
+                    </div>
+                `).join('')}</div>`;
+            } catch {
+                panel.innerHTML = '<p class="text-sm text-red-400 text-center py-5">Could not load episodes.</p>';
+            }
+        }
+
+        async function removeFromPlaylist(playlistId, episodeId, btn) {
+            try {
+                await fetch(`${API}/playlists/${playlistId}/episodes/${episodeId}`, {
+                    method: 'DELETE', headers: authHeaders()
+                });
+                const row = btn.closest('div.flex');
+                row.style.opacity = '0';
+                row.style.transition = 'opacity 0.15s';
+                setTimeout(() => row.remove(), 160);
+                showToast('Removed from playlist');
+            } catch {
+                showToast('Could not remove episode');
+            }
+        }
+
+        // Create playlist
+        function openCreatePlaylistModal() {
+            document.getElementById('new-playlist-name').value = '';
+            document.getElementById('new-playlist-desc').value = '';
+            document.getElementById('modal-pl-error').classList.add('hidden');
+            document.getElementById('modal-create-playlist').classList.remove('hidden');
+            setTimeout(() => document.getElementById('new-playlist-name').focus(), 50);
+        }
+        function closeCreatePlaylistModal() {
+            document.getElementById('modal-create-playlist').classList.add('hidden');
+        }
+
+        async function submitCreatePlaylist() {
+            const name = document.getElementById('new-playlist-name').value.trim();
+            const desc = document.getElementById('new-playlist-desc').value.trim();
+            const errEl = document.getElementById('modal-pl-error');
+            if (!name) { errEl.textContent = 'Please enter a name.'; errEl.classList.remove('hidden'); return; }
+            try {
+                const pl = await fetch(`${API}/playlists`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ name, description: desc || null })
+                }).then(r => r.json());
+                if (pl.error) { errEl.textContent = pl.error; errEl.classList.remove('hidden'); return; }
+                closeCreatePlaylistModal();
+                showToast(`✓ Playlist "${name}" created`);
+                // Reload playlists
+                document.getElementById('playlists-list').innerHTML = '';
+                document.getElementById('playlists-list').classList.add('hidden');
+                document.getElementById('playlists-empty').classList.add('hidden');
+                document.getElementById('playlists-loading').classList.remove('hidden');
+                document.getElementById('playlists-loading').innerHTML = '<div class="skeleton h-24 w-full"></div>';
+                openPlaylistPanels.clear();
+                await loadPlaylists();
+            } catch {
+                errEl.textContent = 'Could not create playlist. Is the server running?';
+                errEl.classList.remove('hidden');
+            }
+        }
+
+        // Delete playlist
+        function openDeletePlaylistModal(id, name) {
+            deletePlaylistId = id;
+            document.getElementById('delete-playlist-name').textContent = `"${name}" and all its episodes will be removed.`;
+            document.getElementById('modal-delete-playlist').classList.remove('hidden');
+        }
+        function closeDeletePlaylistModal() {
+            document.getElementById('modal-delete-playlist').classList.add('hidden');
+            deletePlaylistId = null;
+        }
+        async function confirmDeletePlaylist() {
+            if (!deletePlaylistId) return;
+            try {
+                await fetch(`${API}/playlists/${deletePlaylistId}`, { method: 'DELETE', headers: authHeaders() });
+                closeDeletePlaylistModal();
+                showToast('Playlist deleted');
+                openPlaylistPanels.clear();
+                document.getElementById('playlists-list').innerHTML = '';
+                document.getElementById('playlists-list').classList.add('hidden');
+                document.getElementById('playlists-empty').classList.add('hidden');
+                document.getElementById('playlists-loading').classList.remove('hidden');
+                document.getElementById('playlists-loading').innerHTML = '<div class="skeleton h-24 w-full"></div>';
+                await loadPlaylists();
+            } catch {
+                showToast('Could not delete playlist');
+            }
+        }
+
+        // ── NOTES ─────────────────────────────────────────────────────
+        let editingEpisodeId = null;
+
+        async function loadNotes() {
+            try {
+                allNotes = await fetch(`${API}/notes`, { headers: authHeaders() }).then(r => r.json());
+
+                document.getElementById('notes-loading').classList.add('hidden');
+                document.getElementById('stat-notes').textContent = `${allNotes.length} Note${allNotes.length !== 1 ? 's' : ''}`;
+
+                renderNotes(allNotes);
+            } catch {
+                document.getElementById('notes-loading').classList.add('hidden');
+                document.getElementById('notes-list').classList.remove('hidden');
+                document.getElementById('notes-list').innerHTML = '<p class="text-sm text-red-500 text-center py-8">Could not load notes.</p>';
+            }
+        }
+
+        function renderNotes(notes) {
+            const emptyEl = document.getElementById('notes-empty');
+            const listEl  = document.getElementById('notes-list');
+
+            if (notes.length === 0) {
+                listEl.classList.add('hidden');
+                emptyEl.classList.remove('hidden');
+                return;
+            }
+
+            emptyEl.classList.add('hidden');
+            listEl.classList.remove('hidden');
+            listEl.innerHTML = notes.map(n => `
+                <div class="bg-white border border-gray-200 rounded-xl p-6 group" data-note-id="${n.note_id}" data-episode-id="${n.episode_id}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <a href="episode.html?id=${n.episode_id}" class="font-black text-blue-900 hover:underline text-base">
+                                ${n.episode_title}
+                            </a>
+                            <p class="text-xs text-gray-400 font-semibold mt-0.5">${episodeLabel(n)}</p>
+                        </div>
+                        <span class="text-[10px] text-gray-300 uppercase font-bold ml-4 flex-shrink-0">
+                            ${new Date(n.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                    </div>
+                    <p class="text-sm bg-blue-50 p-4 rounded-lg text-gray-700 italic border-l-4 border-blue-900 leading-relaxed whitespace-pre-wrap">${escapeHtml(n.note_text)}</p>
+                    <div class="flex gap-4 mt-4 opacity-0 group-hover:opacity-100 transition">
+                        <button onclick="openEditNoteModal(${n.episode_id}, '${escapeAttr(n.episode_title)}', this)"
+                            class="text-[11px] uppercase font-black text-blue-900 hover:underline">Edit</button>
+                        <button onclick="deleteNoteFromProfile(${n.episode_id}, this)"
+                            class="text-[11px] uppercase font-black text-red-500 hover:underline">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterNotes() {
+            const q = document.getElementById('notes-search').value.toLowerCase().trim();
+            if (!q) { renderNotes(allNotes); return; }
+            renderNotes(allNotes.filter(n =>
+                n.episode_title.toLowerCase().includes(q) ||
+                n.note_text.toLowerCase().includes(q)
+            ));
+        }
+
+        function openEditNoteModal(episodeId, title, btn) {
+            editingEpisodeId = episodeId;
+            const card = btn.closest('[data-note-id]');
+            const noteText = card.querySelector('p.italic').textContent.trim();
+            document.getElementById('edit-note-title').textContent = title;
+            document.getElementById('edit-note-text').value = noteText;
+            document.getElementById('modal-edit-note').classList.remove('hidden');
+            setTimeout(() => document.getElementById('edit-note-text').focus(), 50);
+        }
+        function closeEditNoteModal() {
+            document.getElementById('modal-edit-note').classList.add('hidden');
+            editingEpisodeId = null;
+        }
+        async function saveEditedNote() {
+            const text = document.getElementById('edit-note-text').value.trim();
+            if (!text) { showToast('Note cannot be empty'); return; }
+            try {
+                const note = await fetch(`${API}/notes/${editingEpisodeId}`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ note_text: text })
+                }).then(r => r.json());
+
+                // Update in local cache
+                const idx = allNotes.findIndex(n => n.episode_id === editingEpisodeId);
+                if (idx !== -1) { allNotes[idx].note_text = text; allNotes[idx].updated_at = note.updated_at; }
+
+                closeEditNoteModal();
+                renderNotes(allNotes);
+                showToast('✓ Note updated');
+            } catch {
+                showToast('Could not save note');
+            }
+        }
+
+        async function deleteNoteFromProfile(episodeId, btn) {
+            if (!confirm('Delete this note?')) return;
+            try {
+                await fetch(`${API}/notes/${episodeId}`, { method: 'DELETE', headers: authHeaders() });
+                allNotes = allNotes.filter(n => n.episode_id !== episodeId);
+                const card = btn.closest('[data-note-id]');
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.97)';
+                card.style.transition = 'all 0.2s ease';
+                setTimeout(() => { card.remove(); renderNotes(allNotes); updateNoteCount(); }, 220);
+                showToast('Note deleted');
+            } catch {
+                showToast('Could not delete note');
+            }
+        }
+
+        function updateNoteCount() {
+            document.getElementById('stat-notes').textContent = `${allNotes.length} Note${allNotes.length !== 1 ? 's' : ''}`;
+        }
+
+        // ── Utils ─────────────────────────────────────────────────────
+        function escapeHtml(str) {
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function escapeAttr(str) {
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        // ── Close modals on backdrop click ────────────────────────────
+        document.getElementById('modal-create-playlist').addEventListener('click', function(e) {
+            if (e.target === this) closeCreatePlaylistModal();
+        });
+        document.getElementById('modal-delete-playlist').addEventListener('click', function(e) {
+            if (e.target === this) closeDeletePlaylistModal();
+        });
+        document.getElementById('modal-edit-note').addEventListener('click', function(e) {
+            if (e.target === this) closeEditNoteModal();
+        });
+
+        // ── Boot ──────────────────────────────────────────────────────
+        window.onload = loadProfile;
     </script>
 </body>
 </html>

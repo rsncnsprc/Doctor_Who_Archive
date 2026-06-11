@@ -7,10 +7,8 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = 5000;
 
-// ── Change this to a long random string in production! ──────
-// e.g. run: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 const JWT_SECRET = 'change_this_to_a_long_random_secret_before_going_public';
-const JWT_EXPIRES_IN = '7d'; // token lasts 7 days
+const JWT_EXPIRES_IN = '7d';
 
 app.use(cors());
 app.use(express.json());
@@ -35,8 +33,6 @@ pool.connect((err, client, release) => {
 });
 
 // ── Auth middleware ──────────────────────────────────────────
-// Use this on any future route that needs a logged-in user.
-// e.g. app.get('/api/playlists', requireAuth, async (req, res) => { ... })
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -55,7 +51,6 @@ function requireAuth(req, res, next) {
 app.post('/api/auth/register', async (req, res) => {
     const { username, email, password } = req.body;
 
-    // Basic validation
     if (!username || !email || !password) {
         return res.status(400).json({ error: 'Username, email and password are all required' });
     }
@@ -70,7 +65,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     try {
-        // Check if username or email already taken
         const existing = await pool.query(
             'SELECT user_id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($2)',
             [username, email]
@@ -79,7 +73,6 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(409).json({ error: 'That username or email is already registered' });
         }
 
-        // Hash password — cost factor 12 is good for a diploma project
         const password_hash = await bcrypt.hash(password, 12);
 
         const result = await pool.query(
@@ -106,7 +99,6 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // ── POST /api/auth/login ─────────────────────────────────────
-// Accepts username OR email in the `identifier` field
 app.post('/api/auth/login', async (req, res) => {
     const { identifier, password } = req.body;
 
@@ -115,14 +107,12 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     try {
-        // Look up by email or username (case-insensitive)
         const result = await pool.query(
             'SELECT * FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)',
             [identifier]
         );
 
         if (result.rows.length === 0) {
-            // Deliberately vague message to not reveal whether the account exists
             return res.status(401).json({ error: 'Incorrect username/email or password' });
         }
 
@@ -151,7 +141,6 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ── GET /api/auth/me ─────────────────────────────────────────
-// Frontend calls this on load to verify a stored token is still valid
 app.get('/api/auth/me', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(
@@ -169,7 +158,323 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 
 
 // ════════════════════════════════════════════════════════════
-// Existing episode routes below — unchanged
+// FAVOURITES
+// ════════════════════════════════════════════════════════════
+
+// GET /api/favourites — get all favourites for the logged-in user
+app.get('/api/favourites', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT f.favourite_id, f.created_at,
+                   e.episode_id, e.episode_title, e.year_released, e.doctor_num,
+                   e.imdb_rating, e.is_missing, e.plot_summary,
+                   se.season_number, sr.series_name
+            FROM favourites f
+            JOIN episodes e ON e.episode_id = f.episode_id
+            LEFT JOIN seasons se ON e.season_id = se.season_id
+            LEFT JOIN series sr ON se.series_id = sr.series_id
+            WHERE f.user_id = $1
+            ORDER BY f.created_at DESC
+        `, [req.user.user_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Get favourites error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch favourites' });
+    }
+});
+
+// GET /api/favourites/ids — just the episode IDs (for quick button state check)
+app.get('/api/favourites/ids', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT episode_id FROM favourites WHERE user_id = $1',
+            [req.user.user_id]
+        );
+        res.json(result.rows.map(r => r.episode_id));
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch favourite IDs' });
+    }
+});
+
+// POST /api/favourites/:episodeId — toggle favourite
+app.post('/api/favourites/:episodeId', requireAuth, async (req, res) => {
+    const episodeId = parseInt(req.params.episodeId);
+    try {
+        const existing = await pool.query(
+            'SELECT favourite_id FROM favourites WHERE user_id = $1 AND episode_id = $2',
+            [req.user.user_id, episodeId]
+        );
+
+        if (existing.rows.length > 0) {
+            await pool.query(
+                'DELETE FROM favourites WHERE user_id = $1 AND episode_id = $2',
+                [req.user.user_id, episodeId]
+            );
+            res.json({ favourited: false });
+        } else {
+            await pool.query(
+                'INSERT INTO favourites (user_id, episode_id) VALUES ($1, $2)',
+                [req.user.user_id, episodeId]
+            );
+            res.json({ favourited: true });
+        }
+    } catch (err) {
+        console.error('Toggle favourite error:', err.message);
+        res.status(500).json({ error: 'Failed to toggle favourite' });
+    }
+});
+
+// DELETE /api/favourites/:episodeId — explicitly remove a favourite
+app.delete('/api/favourites/:episodeId', requireAuth, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM favourites WHERE user_id = $1 AND episode_id = $2',
+            [req.user.user_id, parseInt(req.params.episodeId)]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to remove favourite' });
+    }
+});
+
+
+// ════════════════════════════════════════════════════════════
+// PLAYLISTS
+// ════════════════════════════════════════════════════════════
+
+// GET /api/playlists — all playlists for the logged-in user
+app.get('/api/playlists', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT p.playlist_id, p.name, p.description, p.created_at,
+                   COUNT(pe.episode_id) AS episode_count
+            FROM playlists p
+            LEFT JOIN playlist_episodes pe ON pe.playlist_id = p.playlist_id
+            WHERE p.user_id = $1
+            GROUP BY p.playlist_id
+            ORDER BY p.created_at DESC
+        `, [req.user.user_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Get playlists error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch playlists' });
+    }
+});
+
+// GET /api/playlists/:id — a single playlist with its episodes
+app.get('/api/playlists/:id', requireAuth, async (req, res) => {
+    try {
+        const playlistRes = await pool.query(
+            'SELECT * FROM playlists WHERE playlist_id = $1 AND user_id = $2',
+            [req.params.id, req.user.user_id]
+        );
+        if (playlistRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Playlist not found' });
+        }
+
+        const episodesRes = await pool.query(`
+            SELECT e.episode_id, e.episode_title, e.year_released, e.doctor_num,
+                   e.imdb_rating, e.is_missing, e.plot_summary,
+                   se.season_number, sr.series_name, pe.added_at
+            FROM playlist_episodes pe
+            JOIN episodes e ON e.episode_id = pe.episode_id
+            LEFT JOIN seasons se ON e.season_id = se.season_id
+            LEFT JOIN series sr ON se.series_id = sr.series_id
+            WHERE pe.playlist_id = $1
+            ORDER BY pe.added_at DESC
+        `, [req.params.id]);
+
+        res.json({ ...playlistRes.rows[0], episodes: episodesRes.rows });
+    } catch (err) {
+        console.error('Get playlist error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch playlist' });
+    }
+});
+
+// POST /api/playlists — create a new playlist
+app.post('/api/playlists', requireAuth, async (req, res) => {
+    const { name, description } = req.body;
+    if (!name || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Playlist name is required' });
+    }
+    if (name.length > 100) {
+        return res.status(400).json({ error: 'Playlist name must be under 100 characters' });
+    }
+    try {
+        const result = await pool.query(
+            'INSERT INTO playlists (user_id, name, description) VALUES ($1, $2, $3) RETURNING *',
+            [req.user.user_id, name.trim(), description ? description.trim() : null]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Create playlist error:', err.message);
+        res.status(500).json({ error: 'Failed to create playlist' });
+    }
+});
+
+// PUT /api/playlists/:id — update name/description
+app.put('/api/playlists/:id', requireAuth, async (req, res) => {
+    const { name, description } = req.body;
+    if (!name || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Playlist name is required' });
+    }
+    try {
+        const result = await pool.query(
+            'UPDATE playlists SET name = $1, description = $2 WHERE playlist_id = $3 AND user_id = $4 RETURNING *',
+            [name.trim(), description ? description.trim() : null, req.params.id, req.user.user_id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Playlist not found' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update playlist' });
+    }
+});
+
+// DELETE /api/playlists/:id — delete a playlist
+app.delete('/api/playlists/:id', requireAuth, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM playlists WHERE playlist_id = $1 AND user_id = $2',
+            [req.params.id, req.user.user_id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete playlist' });
+    }
+});
+
+// POST /api/playlists/:id/episodes/:episodeId — add episode to playlist
+app.post('/api/playlists/:id/episodes/:episodeId', requireAuth, async (req, res) => {
+    try {
+        // Verify ownership
+        const pl = await pool.query(
+            'SELECT playlist_id FROM playlists WHERE playlist_id = $1 AND user_id = $2',
+            [req.params.id, req.user.user_id]
+        );
+        if (pl.rows.length === 0) {
+            return res.status(404).json({ error: 'Playlist not found' });
+        }
+
+        await pool.query(
+            'INSERT INTO playlist_episodes (playlist_id, episode_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [req.params.id, req.params.episodeId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Add to playlist error:', err.message);
+        res.status(500).json({ error: 'Failed to add episode to playlist' });
+    }
+});
+
+// DELETE /api/playlists/:id/episodes/:episodeId — remove episode from playlist
+app.delete('/api/playlists/:id/episodes/:episodeId', requireAuth, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM playlist_episodes WHERE playlist_id = $1 AND episode_id = $2',
+            [req.params.id, parseInt(req.params.episodeId)]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to remove episode from playlist' });
+    }
+});
+
+// GET /api/playlists/episode/:episodeId — which playlists contain this episode?
+app.get('/api/playlists/episode/:episodeId', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT p.playlist_id, p.name,
+                   EXISTS(
+                       SELECT 1 FROM playlist_episodes pe2
+                       WHERE pe2.playlist_id = p.playlist_id AND pe2.episode_id = $2
+                   ) AS has_episode
+            FROM playlists p
+            WHERE p.user_id = $1
+            ORDER BY p.created_at DESC
+        `, [req.user.user_id, req.params.episodeId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch playlists for episode' });
+    }
+});
+
+
+// ════════════════════════════════════════════════════════════
+// EPISODE NOTES
+// ════════════════════════════════════════════════════════════
+
+// GET /api/notes — all notes for the logged-in user
+app.get('/api/notes', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT n.note_id, n.note_text, n.created_at, n.updated_at,
+                   e.episode_id, e.episode_title, e.year_released, e.doctor_num,
+                   se.season_number
+            FROM episode_notes n
+            JOIN episodes e ON e.episode_id = n.episode_id
+            LEFT JOIN seasons se ON e.season_id = se.season_id
+            WHERE n.user_id = $1
+            ORDER BY n.updated_at DESC
+        `, [req.user.user_id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Get notes error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch notes' });
+    }
+});
+
+// GET /api/notes/:episodeId — get the note for a specific episode
+app.get('/api/notes/:episodeId', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT * FROM episode_notes WHERE user_id = $1 AND episode_id = $2',
+            [req.user.user_id, req.params.episodeId]
+        );
+        res.json(result.rows[0] || null);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch note' });
+    }
+});
+
+// POST /api/notes/:episodeId — create or update a note (upsert)
+app.post('/api/notes/:episodeId', requireAuth, async (req, res) => {
+    const { note_text } = req.body;
+    if (!note_text || note_text.trim().length === 0) {
+        return res.status(400).json({ error: 'Note text cannot be empty' });
+    }
+    try {
+        const result = await pool.query(`
+            INSERT INTO episode_notes (user_id, episode_id, note_text, updated_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (user_id, episode_id)
+            DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = NOW()
+            RETURNING *
+        `, [req.user.user_id, req.params.episodeId, note_text.trim()]);
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Save note error:', err.message);
+        res.status(500).json({ error: 'Failed to save note' });
+    }
+});
+
+// DELETE /api/notes/:episodeId — delete a note
+app.delete('/api/notes/:episodeId', requireAuth, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM episode_notes WHERE user_id = $1 AND episode_id = $2',
+            [req.user.user_id, req.params.episodeId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete note' });
+    }
+});
+
+
+// ════════════════════════════════════════════════════════════
+// Existing episode routes — unchanged
 // ════════════════════════════════════════════════════════════
 
 // GET /api/episodes
