@@ -26,18 +26,47 @@
         <div class="max-w-4xl mx-auto text-center">
             <h1 class="text-4xl font-bold tracking-tighter italic mb-8 uppercase">Gallifrey<span class="accent-gold text-5xl">Archive</span></h1>
             
-            <div class="flex flex-col items-center gap-4">
-                <div class="w-full flex gap-2">
+            <div class="flex flex-col items-center gap-3 w-full">
+
+                <!-- Mode toggle -->
+                <div class="flex items-center gap-2 bg-white/10 rounded-full p-1 border border-white/20 self-center">
+                    <button id="btn-mode-regular" onclick="setSearchMode('regular')"
+                            class="px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition bg-white text-blue-900 shadow">
+                        Search
+                    </button>
+                    <button id="btn-mode-ai" onclick="setSearchMode('ai')"
+                            class="px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition text-white/70 hover:text-white">
+                        AI Query
+                    </button>
+                </div>
+
+                <!-- Regular search row -->
+                <div id="regular-search-row" class="w-full flex gap-2">
                     <div class="relative flex-1">
-                        <!-- CHANGED: added id="searchInput" and oninput handler -->
-                        <input type="text" id="searchInput" placeholder="Search episodes, villains, companions..." 
+                        <input type="text" id="searchInput" placeholder="Search episodes, villains, companions..."
                                class="w-full p-4 pl-12 rounded-full text-black shadow-inner focus:ring-4 focus:ring-blue-400 outline-none"
                                oninput="debounceSearch()">
-                        <span class="absolute left-4 top-4 text-gray-400">🔍</span>
+                        <span class="absolute left-4 top-4 text-gray-400"></span>
                     </div>
                     <button onclick="toggleFilters()" class="bg-blue-800 hover:bg-blue-700 px-6 py-4 rounded-full font-bold flex items-center gap-2 transition border border-blue-400 shadow-lg">
                         <span>Filters</span>
                         <svg id="arrow" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                </div>
+
+                <!-- AI search row (hidden by default) -->
+                <div id="ai-search-row" class="w-full flex gap-2 hidden">
+                    <div class="relative flex-1">
+                        <input type="text" id="aiSearchInput"
+                               placeholder="Desribe the setting, mood and genre of the episode"
+                               class="w-full p-4 pl-12 rounded-full text-black shadow-inner focus:ring-4 focus:ring-blue-400 outline-none"
+                               onkeydown="if(event.key==='Enter') runAiSearch()">
+                        <span class="absolute left-4 top-4 text-gray-400"></span>
+                    </div>
+                    <button onclick="runAiSearch()"
+                            id="ai-search-btn"
+                            class="bg-blue-800 hover:bg-blue-700 text-white px-6 py-4 rounded-full font-bold transition border border-blue-400 shadow-lg whitespace-nowrap">
+                        Search
                     </button>
                 </div>
             </div>
@@ -54,15 +83,18 @@
                     <label class="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">Era Selection</label>
                     <div class="space-y-3">
                         <!-- CHANGED: added id="doctorFilter" and onchange handler -->
-                        <select id="doctorFilter" onchange="applyFilters()" class="w-full p-3 bg-gray-50 border rounded-lg text-sm">
+                        <select id="doctorFilter" onchange="onDoctorChange()" class="w-full p-3 bg-gray-50 border rounded-lg text-sm">
                             <option value="">All Doctors</option>
                             <!-- Populated dynamically by JS -->
                         </select>
-                        <!-- CHANGED: added id="seasonFilter" and onchange handler -->
-                        <select id="seasonFilter" onchange="applyFilters()" class="w-full p-3 bg-gray-50 border rounded-lg text-sm">
+                        <!-- CHANGED: added id="doctorFilter" and onchange handler -->
+                        <select id="seasonFilter" onchange="onSeasonChange()" class="w-full p-3 bg-gray-50 border rounded-lg text-sm">
                             <option value="">All Seasons</option>
                             <!-- Populated dynamically by JS -->
                         </select>
+                        <button id="btn-clear-filters" onclick="clearAllFilters()" class="sm:col-span-2 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-black uppercase tracking-wider rounded-xl transition hidden">
+                            Clear Filters ×
+                        </button>                        
                     </div>
                 </div>
 
@@ -71,9 +103,9 @@
                     <label class="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">Episode Details</label>
                     <div class="space-y-3">
                         <!-- CHANGED: added id and oninput -->
-                        <input type="text" id="villainFilter" placeholder="Villains (e.g. Master)..." 
+                        <input type="text" id="villainFilter" placeholder="Villains" 
                                class="w-full p-3 bg-gray-50 border rounded-lg text-sm" oninput="debounceSearch()">
-                        <input type="text" id="companionFilter" placeholder="Companions (e.g. Sarah Jane)..." 
+                        <input type="text" id="companionFilter" placeholder="Companions" 
                                class="w-full p-3 bg-gray-50 border rounded-lg text-sm" oninput="debounceSearch()">
                     </div>
                 </div>
@@ -90,20 +122,20 @@
                             </div>
                             <!-- onchange to trigger filter -->
                             <input type="range" id="ratingSlider" min="1" max="9" step="0.5" value="6" 
-                                   oninput="updateRating(this.value)" onchange="applyFilters()" 
+                                   oninput="updateRating(this.value)" onchange="updateClearButton(); applyFilters()" 
                                    class="w-full accent-blue-900">
                         </div>
                     </div>
 
-                    <div class="flex gap-4 pt-3 border-t">
+                    <div id="availability-filter" class="flex gap-4 pt-3 border-t">
                         <label class="flex items-center gap-2 text-xs cursor-pointer">
-                            <input type="radio" name="av" value="all" checked onchange="applyFilters()" class="accent-blue-900"> All
+                            <input type="radio" name="av" value="all" checked onchange="updateClearButton(); applyFilters()" class="accent-blue-900"> All
                         </label>
                         <label class="flex items-center gap-2 text-xs cursor-pointer">
-                            <input type="radio" name="av" value="available" onchange="applyFilters()" class="accent-blue-900"> Available
+                            <input type="radio" name="av" value="available" onchange="updateClearButton(); applyFilters()" class="accent-blue-900"> Available
                         </label>
-                        <label class="flex items-center gap-2 text-xs cursor-pointer">
-                            <input type="radio" name="av" value="lost" onchange="applyFilters()" class="accent-blue-900"> Lost
+                        <label id="lost-filter-label" class="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="av" value="lost" onchange="updateClearButton(); applyFilters()" class="accent-blue-900"> Lost
                         </label>
                     </div>
                 </div>
@@ -148,6 +180,52 @@
             document.getElementById('ratingDisplay').innerText = val + "+";
         }
 
+        // Show/hide availability filters — the whole group is hidden on Modern/New
+        // since all those episodes are available. On Classic, the Lost option is also shown.
+        function updateLostFilter() {
+            const availSection = document.getElementById('availability-filter');
+            const lostLabel = document.getElementById('lost-filter-label');
+            if (currentTab === 'Classic') {
+                availSection.style.display = '';
+                lostLabel.style.display = '';
+            } else {
+                availSection.style.display = 'none';
+                // Reset to "all" if leaving Classic with lost/available selected
+                const avail = document.querySelector('input[name="av"]:checked')?.value;
+                if (avail !== 'all') {
+                    document.querySelector('input[name="av"][value="all"]').checked = true;
+                }
+            }
+        }
+
+        // Update the Clear Filters button visibility
+        function updateClearButton() {
+            const doctor  = document.getElementById('doctorFilter').value;
+            const season  = document.getElementById('seasonFilter').value;
+            const villain = document.getElementById('villainFilter').value.trim();
+            const comp    = document.getElementById('companionFilter').value.trim();
+            const search  = document.getElementById('searchInput').value.trim();
+            const rating  = parseFloat(document.getElementById('ratingSlider').value);
+            const avail   = document.querySelector('input[name="av"]:checked')?.value;
+
+            const hasFilter = doctor || season || villain || comp || search || rating > 6 || avail !== 'all';
+            document.getElementById('btn-clear-filters').classList.toggle('hidden', !hasFilter);
+        }
+
+        function clearAllFilters() {
+            document.getElementById('doctorFilter').value = '';
+            document.getElementById('seasonFilter').value = '';
+            document.getElementById('villainFilter').value = '';
+            document.getElementById('companionFilter').value = '';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('ratingSlider').value = 6;
+            document.getElementById('ratingDisplay').innerText = '6.0+';
+            document.querySelector('input[name="av"][value="all"]').checked = true;
+            document.getElementById('btn-clear-filters').classList.add('hidden');
+            // Reload full dropdown options then apply
+            loadFilterOptions().then(() => applyFilters());
+        }
+
         function setTab(tabName) {
             currentTab = tabName;
             ['Classic', 'Modern', 'New'].forEach(t => {
@@ -158,25 +236,32 @@
                         : 'text-gray-400 hover:text-blue-900 px-4 pb-1 transition';
                 }
             });
-            // Reset doctor/season selections when switching tabs, then reload options
+            // Reset doctor/season when switching tabs
             document.getElementById('doctorFilter').value = '';
             document.getElementById('seasonFilter').value = '';
+            updateLostFilter();
             loadFilterOptions().then(() => applyFilters());
         }
 
         function debounceSearch() {
             clearTimeout(searchTimer);
-            searchTimer = setTimeout(applyFilters, 350);
+            searchTimer = setTimeout(() => { updateClearButton(); applyFilters(); }, 350);
         }
 
-        // Populate Filter Dropdowns
-        async function loadFilterOptions() {
-            try {
-                const data = await fetch(`${API}/filter-options?tab=${encodeURIComponent(currentTab)}`).then(r => r.json());
+        // ── Populate Filter Dropdowns (with cross-filtering support) ──
 
-                // Preserve current selections so we can restore them if still valid
-                const prevDoctor = document.getElementById('doctorFilter').value;
-                const prevSeason = document.getElementById('seasonFilter').value;
+        async function loadFilterOptions(preserveSelections = false) {
+            const prevDoctor = document.getElementById('doctorFilter').value;
+            const prevSeason = document.getElementById('seasonFilter').value;
+
+            try {
+                // Build params: always send tab; send whichever filter is active
+                // so the OTHER dropdown narrows to matching options only.
+                const params = new URLSearchParams({ tab: currentTab });
+                if (prevDoctor) params.set('doctor', prevDoctor);
+                if (prevSeason) params.set('season', prevSeason);
+
+                const data = await fetch(`${API}/filter-options?${params}`).then(r => r.json());
 
                 // Rebuild doctor dropdown
                 const doctorSel = document.getElementById('doctorFilter');
@@ -187,8 +272,9 @@
                     opt.textContent = `Doctor ${d}`;
                     doctorSel.appendChild(opt);
                 });
-                // Restore selection if still available
-                if (data.doctors.includes(prevDoctor)) doctorSel.value = prevDoctor;
+                if (preserveSelections && data.doctors.includes(prevDoctor)) {
+                    doctorSel.value = prevDoctor;
+                }
 
                 // Rebuild season dropdown
                 const seasonSel = document.getElementById('seasonFilter');
@@ -199,32 +285,47 @@
                     opt.textContent = `Season ${s}`;
                     seasonSel.appendChild(opt);
                 });
-                // Restore selection if still available
-                if (data.seasons.map(String).includes(prevSeason)) seasonSel.value = prevSeason;
+                if (preserveSelections && data.seasons.map(String).includes(prevSeason)) {
+                    seasonSel.value = prevSeason;
+                }
 
             } catch (err) {
                 console.error('Failed to load filter options:', err);
             }
         }
 
+        // Called when doctor dropdown changes — narrows the season list
+        async function onDoctorChange() {
+            await loadFilterOptions(true);
+            updateClearButton();
+            applyFilters();
+        }
+
+        // Called when season dropdown changes — narrows the doctor list
+        async function onSeasonChange() {
+            await loadFilterOptions(true);
+            updateClearButton();
+            applyFilters();
+        }
+
         // ── Main Data Fetch ──────────────────────────────────────
 
         async function applyFilters() {
+            updateClearButton();
             const container = document.getElementById('episode-list');
             container.innerHTML = '<p class="text-center text-gray-400 py-10">Loading...</p>';
 
-            // Build query string from UI state
             const params = new URLSearchParams();
+            params.append('tab', currentTab);
 
-            const search = document.getElementById('searchInput').value.trim();
-            const villain = document.getElementById('villainFilter').value.trim();
-            const companion = document.getElementById('companionFilter').value.trim();
-            const doctor = document.getElementById('doctorFilter').value;
-            const season = document.getElementById('seasonFilter').value;
-            const rating = document.getElementById('ratingSlider').value;
-            const avail = document.querySelector('input[name="av"]:checked')?.value;
+            const search   = document.getElementById('searchInput').value.trim();
+            const villain  = document.getElementById('villainFilter').value.trim();
+            const companion= document.getElementById('companionFilter').value.trim();
+            const doctor   = document.getElementById('doctorFilter').value;
+            const season   = document.getElementById('seasonFilter').value;
+            const rating   = document.getElementById('ratingSlider').value;
+            const avail    = document.querySelector('input[name="av"]:checked')?.value;
 
-            // Merge text searches into one param (server handles it)
             const combinedSearch = [search, villain, companion].filter(Boolean).join(' ');
             if (combinedSearch) params.append('search', combinedSearch);
             if (doctor)         params.append('doctor', doctor);
@@ -234,21 +335,10 @@
             if (avail === 'lost')      params.append('available', 'false');
 
             try {
-                let episodes = await fetch(`${API}/episodes?${params}`).then(r => r.json());
+                const episodes = await fetch(`${API}/episodes?${params}`).then(r => r.json());
 
-                // Client-side tab filter by series_name
-                // Adjust these strings to match what's in your series table
-                if (currentTab === 'Classic') {
-                    episodes = episodes.filter(ep => ep.series_name && ep.series_name.toLowerCase().includes('classic'));
-                } else if (currentTab === 'Modern') {
-                    episodes = episodes.filter(ep => ep.series_name && ep.series_name.toLowerCase().includes('modern'));
-                } else if (currentTab === 'New') {
-                    episodes = episodes.filter(ep => ep.series_name && 
-                        !ep.series_name.toLowerCase().includes('classic') && 
-                        !ep.series_name.toLowerCase().includes('modern'));
-                }
-
-                document.getElementById('episode-count').textContent = `${episodes.length} episode${episodes.length !== 1 ? 's' : ''} found`;
+                document.getElementById('episode-count').textContent =
+                    `${episodes.length} episode${episodes.length !== 1 ? 's' : ''} found`;
 
                 if (episodes.length === 0) {
                     container.innerHTML = '<p class="text-center text-gray-400 py-10">No episodes match your filters.</p>';
@@ -277,7 +367,7 @@
 
             } catch (err) {
                 console.error('Failed to fetch episodes:', err);
-                container.innerHTML = '<p class="text-center text-red-400 py-10"> Could not connect to the server. Make sure server.js is running on port 5000.</p>';
+                container.innerHTML = '<p class="text-center text-red-400 py-10">⚠ Could not connect to the server. Make sure server.js is running on port 5000.</p>';
             }
         }
 
@@ -287,9 +377,116 @@
 
         // ── Init ─────────────────────────────────────────────────
         window.onload = async () => {
+            updateLostFilter();
             await loadFilterOptions();
             applyFilters();
         };
+
+        // ════════════════════════════════════════════════════════
+        // AI SEARCH
+        // ════════════════════════════════════════════════════════
+
+        let searchMode = 'regular'; // 'regular' | 'ai'
+
+        function setSearchMode(mode) {
+            searchMode = mode;
+
+            const regularRow = document.getElementById('regular-search-row');
+            const aiRow      = document.getElementById('ai-search-row');
+            const btnRegular = document.getElementById('btn-mode-regular');
+            const btnAi      = document.getElementById('btn-mode-ai');
+            const filterPanel = document.getElementById('filterPanel');
+
+            if (mode === 'ai') {
+                regularRow.classList.add('hidden');
+                aiRow.classList.remove('hidden');
+                btnAi.className      = 'px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition bg-white text-blue-900 shadow';
+                btnRegular.className = 'px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition text-white/70 hover:text-white';
+                // Hide filter panel when switching to AI mode
+                filterPanel.classList.add('hidden');
+                document.getElementById('arrow').style.transform = 'rotate(0deg)';
+                // Leave the episode list as-is when switching to AI mode
+            } else {
+                aiRow.classList.add('hidden');
+                regularRow.classList.remove('hidden');
+                btnRegular.className = 'px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition bg-white text-blue-900 shadow';
+                btnAi.className      = 'px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition text-white/70 hover:text-white';
+                // Restore regular search results
+                applyFilters();
+            }
+        }
+
+        async function runAiSearch() {
+            const query = document.getElementById('aiSearchInput').value.trim();
+            if (!query) return;
+
+            const container    = document.getElementById('episode-list');
+            const countEl      = document.getElementById('episode-count');
+            const btn          = document.getElementById('ai-search-btn');
+
+            // Loading state
+            btn.disabled = true;
+            btn.textContent = 'Thinking…';
+            container.innerHTML = `
+                <div class="flex flex-col items-center gap-3 py-12 text-gray-400">
+                    <div class="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-sm">The AI is searching the archives…</p>
+                </div>`;
+            countEl.textContent = '';
+
+            try {
+                const res = await fetch(`${API}/ai-search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, tab: currentTab })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    container.innerHTML = `<p class="text-center text-red-400 py-10">⚠ ${data.error || 'AI search failed.'}</p>`;
+                    countEl.textContent = '';
+                    btn.disabled = false;
+                    btn.textContent = 'Search';
+                    return;
+                }
+
+                const episodes = data.results || [];
+
+                countEl.textContent = `${episodes.length} episode${episodes.length !== 1 ? 's' : ''} matched`;
+
+                if (episodes.length === 0) {
+                    container.innerHTML = '<p class="text-center text-gray-400 py-10">No episodes matched your query. Try rephrasing it.</p>';
+                } else {
+                    container.innerHTML = episodes.map(ep => `
+                        <div onclick="window.location.href='episode.html?id=${ep.episode_id}'"
+                             class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex gap-6 hover:border-blue-300 transition cursor-pointer">
+                            <div class="w-12 h-12 bg-blue-50 text-blue-900 rounded-full flex items-center justify-center font-black flex-shrink-0 text-sm">
+                                ${ep.episode_id}
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-start">
+                                    <h2 class="text-xl font-bold">${ep.episode_title || 'Untitled'}</h2>
+                                    <span class="text-yellow-600 font-bold text-sm">${ep.imdb_rating ? 'IMDb ' + ep.imdb_rating : ''}</span>
+                                </div>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase mb-1">
+                                    ${ep.year_released || ''}${ep.doctor_num ? ' • Doctor: ' + ep.doctor_num : ''}${ep.season_number ? ' • Season ' + ep.season_number : ''}
+                                    ${ep.is_missing ? ' • <span class="text-red-500">LOST EPISODE</span>' : ''}
+                                </p>
+                                ${ep.episode_mood || ep.setting ? `<p class="text-[10px] text-gray-500 font-semibold mb-2">${[ep.episode_mood, ep.setting].filter(Boolean).join(' · ')}</p>` : ''}
+                                <p class="text-sm text-gray-600 line-clamp-2">${ep.plot_summary || 'No summary available.'}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+            } catch (err) {
+                console.error('AI search error:', err);
+                container.innerHTML = '<p class="text-center text-red-400 py-10">⚠ Could not connect to the server.</p>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Search';
+            }
+        }
     </script>
 </body>
 </html>

@@ -298,7 +298,7 @@
                 }).then(r => r.json());
                 isFavourited = res.favourited;
                 updateFavBtn();
-                showToast(isFavourited ? '❤️ Added to Favourites' : 'Removed from Favourites');
+                showToast(isFavourited ? 'Added to Favourites' : 'Removed from Favourites');
             } catch {
                 showToast('Could not update favourites');
             }

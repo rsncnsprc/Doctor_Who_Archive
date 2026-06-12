@@ -3,6 +3,19 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
+
+// ── Load GROQ_API_KEY from api_key.env ───────────────────────
+let GROQ_API_KEY = '';
+try {
+    const envPath = path.join(__dirname, 'api_key.env');
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const match = envContent.match(/GROQ_API_KEY\s*=\s*(.+)/);
+    if (match) GROQ_API_KEY = match[1].trim();
+} catch (e) {
+    console.warn('api_key.env not found or unreadable — AI search will be unavailable');
+}
 
 const app = express();
 const PORT = 5000;
@@ -480,7 +493,7 @@ app.delete('/api/notes/:episodeId', requireAuth, async (req, res) => {
 // GET /api/episodes
 app.get('/api/episodes', async (req, res) => {
     try {
-        const { doctor, season, min_rating, available, search } = req.query;
+        const { doctor, season, min_rating, available, search, tab } = req.query;
 
         let query = `
             SELECT 
@@ -508,6 +521,17 @@ app.get('/api/episodes', async (req, res) => {
 
         const params = [];
         let idx = 1;
+
+        if (tab === 'Classic') {
+            query += ` AND sr.series_name = $${idx++}`;
+            params.push('Classic');
+        } else if (tab === 'Modern') {
+            query += ` AND sr.series_name = $${idx++}`;
+            params.push('Modern');
+        } else if (tab === 'New') {
+            query += ` AND sr.series_name = $${idx++}`;
+            params.push('NewEra');
+        }
 
         if (doctor) {
             query += ` AND (e.doctor_num = $${idx} OR e.doctor_num LIKE $${idx+1} OR e.doctor_num LIKE $${idx+2} OR e.doctor_num LIKE $${idx+3})`;
@@ -620,17 +644,29 @@ app.get('/api/seasons', async (req, res) => {
 });
 
 // GET /api/filter-options
+// Supports cross-filtering: pass ?tab=Classic&doctor=4 to get only seasons
+// that Doctor 4 appears in (within Classic), and vice-versa for ?season=14.
 app.get('/api/filter-options', async (req, res) => {
     try {
-        const { tab } = req.query;
+        const { tab, doctor, season } = req.query;
 
+        // Build a series-name condition based on the active tab
         let seriesFilter = '';
         if (tab === 'Classic') {
-            seriesFilter = `AND LOWER(sr.series_name) LIKE '%classic%'`;
+            seriesFilter = `AND sr.series_name = 'Classic'`;
         } else if (tab === 'Modern') {
-            seriesFilter = `AND LOWER(sr.series_name) LIKE '%modern%'`;
-        } else if (tab === 'Spin-offs') {
-            seriesFilter = `AND LOWER(sr.series_name) NOT LIKE '%classic%' AND LOWER(sr.series_name) NOT LIKE '%modern%'`;
+            seriesFilter = `AND sr.series_name = 'Modern'`;
+        } else if (tab === 'New') {
+            seriesFilter = `AND sr.series_name = 'NewEra'`;
+        }
+
+        // ── Doctors list ─────────────────────────────────────────
+        // When a season is selected, only return doctors that appear in that season
+        const doctorParams = [];
+        let doctorSeasonClause = '';
+        if (season) {
+            doctorSeasonClause = `AND se.season_number = $${doctorParams.length + 1}`;
+            doctorParams.push(parseInt(season));
         }
 
         const doctorsResult = await pool.query(`
@@ -641,8 +677,23 @@ app.get('/api/filter-options', async (req, res) => {
             WHERE e.doctor_num IS NOT NULL
               AND e.doctor_num NOT LIKE '%,%'
               ${seriesFilter}
+              ${doctorSeasonClause}
             ORDER BY e.doctor_num
-        `);
+        `, doctorParams);
+
+        // ── Seasons list ─────────────────────────────────────────
+        // When a doctor is selected, only return seasons that doctor appears in
+        const seasonParams = [];
+        let seasonDoctorClause = '';
+        if (doctor) {
+            seasonDoctorClause = `AND (
+                e.doctor_num = $${seasonParams.length + 1} OR
+                e.doctor_num LIKE $${seasonParams.length + 2} OR
+                e.doctor_num LIKE $${seasonParams.length + 3} OR
+                e.doctor_num LIKE $${seasonParams.length + 4}
+            )`;
+            seasonParams.push(doctor, `${doctor},%`, `%, ${doctor},%`, `%, ${doctor}`);
+        }
 
         const seasonsResult = await pool.query(`
             SELECT DISTINCT se.season_number
@@ -651,8 +702,9 @@ app.get('/api/filter-options', async (req, res) => {
             INNER JOIN episodes e ON e.season_id = se.season_id
             WHERE se.season_number IS NOT NULL
               ${seriesFilter}
+              ${seasonDoctorClause}
             ORDER BY se.season_number ASC
-        `);
+        `, seasonParams);
 
         res.json({
             doctors: doctorsResult.rows.map(r => r.doctor_num),
@@ -662,6 +714,290 @@ app.get('/api/filter-options', async (req, res) => {
     } catch (err) {
         console.error('Error fetching filter options:', err.message);
         res.status(500).json({ error: 'Failed to fetch filter options' });
+    }
+});
+
+// ════════════════════════════════════════════════════════════
+// AI SEARCH  (Groq — free tier, llama-3.3-70b-versatile)
+// ════════════════════════════════════════════════════════════
+
+// POST /api/ai-search
+// Body: { query: string, tab?: string }
+// Returns: { results: Episode[], explanation: string }
+//
+// Strategy: avoid token limit by pre-filtering in SQL before sending to Groq.
+// Step 1 — Ask Groq (cheaply) to extract search intent: keywords, mood, setting,
+//           companions to include/exclude, etc.
+// Step 2 — Use that intent to build a SQL query that pulls a small candidate set.
+// Step 3 — Ask Groq to rank/confirm those candidates against the original query.
+app.post('/api/ai-search', async (req, res) => {
+    if (!GROQ_API_KEY) {
+        return res.status(503).json({ error: 'AI search is not configured. Please add GROQ_API_KEY to api_key.env' });
+    }
+
+    const { query, tab } = req.body;
+    if (!query || query.trim().length === 0) {
+        return res.status(400).json({ error: 'Query is required' });
+    }
+
+    // Helper: call Groq with a small prompt
+    async function callGroq(messages, maxTokens = 512) {
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.1,
+                max_tokens: maxTokens,
+                messages
+            })
+        });
+        if (!r.ok) {
+            const txt = await r.text();
+            throw new Error('Groq error: ' + txt);
+        }
+        const d = await r.json();
+        return d.choices?.[0]?.message?.content || '';
+    }
+
+    function parseJSON(raw) {
+        return JSON.parse(raw.replace(/```json|```/g, '').trim());
+    }
+
+    try {
+        // ── Step 1: Intent extraction (tiny prompt, ~200 tokens) ────────────
+        // Ask the model to parse the query into structured search intent.
+        const intentRaw = await callGroq([
+            {
+                role: 'system',
+                content: `You parse Doctor Who episode search queries into structured intent.
+Return ONLY valid JSON, no markdown. Schema:
+{
+  "keywords": ["word1","word2"],        // general words to search in title/summary
+  "mood": ["horror","tense","funny"],   // episode mood/atmosphere words
+  "setting_past": true/false,           // episode set in the historical past
+  "setting_future": true/false,         // episode set in the future / space
+  "setting_contemporary": true/false,   // episode set in present-day Earth
+  "companions_include": ["Amy","Rose"], // companion names that MUST appear
+  "companions_exclude": ["River"],      // companion names that must NOT appear
+  "villains_include": ["Daleks"],       // villain names that MUST appear
+  "villains_exclude": [],
+  "doctor_num": null                    // specific doctor number or null
+}`
+            },
+            { role: 'user', content: `Query: "${query.trim()}"` }
+        ], 400);
+
+        let intent;
+        try {
+            intent = parseJSON(intentRaw);
+        } catch {
+            // If parsing fails, fall back to keyword-only search
+            intent = { keywords: query.trim().split(/\s+/) };
+        }
+
+        // ── Step 2: SQL pre-filter — pull candidate episodes ────────────────
+        // Build a broad WHERE clause from the extracted intent so we only
+        // send ~30-60 rows to Groq instead of the full table.
+        const params = [];
+        let idx = 1;
+        const conditions = ['1=1'];
+
+        // Era tab filter
+        if (tab === 'Classic') {
+            conditions.push(`sr.series_name = $${idx++}`);
+            params.push('Classic');
+        } else if (tab === 'Modern') {
+            conditions.push(`sr.series_name = $${idx++}`);
+            params.push('Modern');
+        } else if (tab === 'New') {
+            conditions.push(`sr.series_name = $${idx++}`);
+            params.push('NewEra');
+        }
+
+        // Build OR clauses for broad keyword / mood / setting matching
+        const orParts = [];
+
+        const allKeywords = [
+            ...(intent.keywords || []),
+            ...(intent.mood || [])
+        ].filter(k => k && k.length > 2);
+
+        for (const kw of allKeywords) {
+            const p = `%${kw}%`;
+            params.push(p, p, p, p, p);
+            orParts.push(`(
+                LOWER(e.episode_title)  LIKE LOWER($${idx})   OR
+                LOWER(e.plot_summary)   LIKE LOWER($${idx+1}) OR
+                LOWER(e.episode_mood)   LIKE LOWER($${idx+2}) OR
+                LOWER(e.vibe_tags)      LIKE LOWER($${idx+3}) OR
+                LOWER(e.setting)        LIKE LOWER($${idx+4})
+            )`);
+            idx += 5;
+        }
+
+        // Setting inference
+        if (intent.setting_past) {
+            params.push('%past%', '%histor%', '%medieval%', '%victorian%', '%ancient%', '%century%', '%war%');
+            orParts.push(`(LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}))`);
+        }
+        if (intent.setting_future) {
+            params.push('%future%', '%space%', '%spaceship%', '%planet%', '%alien%', '%sci-fi%');
+            orParts.push(`(LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}))`);
+        }
+        if (intent.setting_contemporary) {
+            params.push('%contemporary%', '%present%', '%modern earth%', '%london%');
+            orParts.push(`(LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}) OR LOWER(e.setting) LIKE LOWER($${idx++}))`);
+        }
+
+        // Companions / villains to include → narrow to episodes that have them
+        for (const name of (intent.companions_include || [])) {
+            params.push(`%${name}%`);
+            conditions.push(`LOWER(e.companions) LIKE LOWER($${idx++})`);
+        }
+        for (const name of (intent.villains_include || [])) {
+            params.push(`%${name}%`);
+            conditions.push(`LOWER(e.villains) LIKE LOWER($${idx++})`);
+        }
+
+        // Companions / villains to exclude → hard filter them out
+        for (const name of (intent.companions_exclude || [])) {
+            params.push(`%${name}%`);
+            conditions.push(`(e.companions IS NULL OR LOWER(e.companions) NOT LIKE LOWER($${idx++}))`);
+        }
+        for (const name of (intent.villains_exclude || [])) {
+            params.push(`%${name}%`);
+            conditions.push(`(e.villains IS NULL OR LOWER(e.villains) NOT LIKE LOWER($${idx++}))`);
+        }
+
+        // Doctor filter
+        if (intent.doctor_num) {
+            const d = String(intent.doctor_num);
+            params.push(d, `${d},%`, `%, ${d},%`, `%, ${d}`);
+            conditions.push(`(e.doctor_num = $${idx} OR e.doctor_num LIKE $${idx+1} OR e.doctor_num LIKE $${idx+2} OR e.doctor_num LIKE $${idx+3})`);
+            idx += 4;
+        }
+
+        // If we have OR clauses, add them as a group
+        if (orParts.length > 0) {
+            conditions.push('(' + orParts.join(' OR ') + ')');
+        }
+
+        const candidateSQL = `
+            SELECT
+                e.episode_id, e.episode_title, e.plot_summary, e.year_released,
+                e.doctor_num, e.imdb_rating, e.is_missing, e.setting,
+                e.vibe_tags, e.episode_mood, e.companions, e.villains,
+                e.story_title, e.episode_identifier,
+                se.season_number, sr.series_name
+            FROM episodes e
+            LEFT JOIN seasons se ON e.season_id = se.season_id
+            LEFT JOIN series sr  ON se.series_id = sr.series_id
+            WHERE ${conditions.join(' AND ')}
+            ORDER BY e.episode_id ASC
+            LIMIT 60
+        `;
+
+        let candidates = (await pool.query(candidateSQL, params)).rows;
+
+        // If SQL found nothing (very abstract query), grab a broad random sample
+        // so Groq still has something to work with
+        if (candidates.length === 0) {
+            const fallbackParams = [];
+            let fallbackWhere = '1=1';
+            if (tab === 'Classic') { fallbackWhere += ` AND sr.series_name = $1`; fallbackParams.push('Classic'); }
+            else if (tab === 'Modern') { fallbackWhere += ` AND sr.series_name = $1`; fallbackParams.push('Modern'); }
+            else if (tab === 'New') { fallbackWhere += ` AND sr.series_name = $1`; fallbackParams.push('NewEra'); }
+
+            // Also honour hard excludes in fallback
+            let exIdx = fallbackParams.length + 1;
+            for (const name of (intent.companions_exclude || [])) {
+                fallbackParams.push(`%${name}%`);
+                fallbackWhere += ` AND (e.companions IS NULL OR LOWER(e.companions) NOT LIKE LOWER($${exIdx++}))`;
+            }
+            for (const name of (intent.villains_exclude || [])) {
+                fallbackParams.push(`%${name}%`);
+                fallbackWhere += ` AND (e.villains IS NULL OR LOWER(e.villains) NOT LIKE LOWER($${exIdx++}))`;
+            }
+
+            candidates = (await pool.query(`
+                SELECT e.episode_id, e.episode_title, e.plot_summary, e.year_released,
+                       e.doctor_num, e.imdb_rating, e.is_missing, e.setting,
+                       e.vibe_tags, e.episode_mood, e.companions, e.villains,
+                       e.story_title, e.episode_identifier, se.season_number, sr.series_name
+                FROM episodes e
+                LEFT JOIN seasons se ON e.season_id = se.season_id
+                LEFT JOIN series sr  ON se.series_id = sr.series_id
+                WHERE ${fallbackWhere}
+                ORDER BY RANDOM() LIMIT 50
+            `, fallbackParams)).rows;
+        }
+
+        if (candidates.length === 0) {
+            return res.json({ results: [], explanation: 'No episodes found in this era.' });
+        }
+
+        // ── Step 3: Ask Groq to rank the small candidate set ────────────────
+        // Compact representation — strip plot_summary to 120 chars to save tokens
+        const catalogue = candidates.map(ep => ({
+            id:  ep.episode_id,
+            t:   ep.episode_title,
+            y:   ep.year_released,
+            dr:  ep.doctor_num,
+            mood: ep.episode_mood,
+            set: ep.setting,
+            vibe: ep.vibe_tags,
+            comp: ep.companions,
+            vil:  ep.villains,
+            s:   ep.plot_summary ? ep.plot_summary.slice(0, 120) : null
+        }));
+
+        const rankRaw = await callGroq([
+            {
+                role: 'system',
+                content: `You are a Doctor Who episode search assistant. Given a small JSON catalogue and a user query, return the best matching episode IDs.
+Rules:
+- "scary"/"horror" → mood/vibe matching; "in the past" → historical setting; "in the future" → futuristic/space setting.
+- Honour exclusions ("but not X", "without X") — do NOT include excluded characters.
+- Return ONLY valid JSON: { "episode_ids": [1,2,3], "explanation": "one sentence" }
+- Up to 15 results. episode_ids must be integers from the catalogue "id" field.`
+            },
+            {
+                role: 'user',
+                content: `Catalogue: ${JSON.stringify(catalogue)}
+
+Query: "${query.trim()}"
+
+Return JSON.`
+            }
+        ], 512);
+
+        let aiResult;
+        try {
+            aiResult = parseJSON(rankRaw);
+        } catch {
+            console.error('Failed to parse Groq rank response:', rankRaw);
+            return res.status(500).json({ error: 'AI returned an unexpected format. Try rephrasing your query.' });
+        }
+
+        const matchedIds = new Set((aiResult.episode_ids || []).map(Number));
+        const matchedEpisodes = candidates.filter(ep => matchedIds.has(ep.episode_id));
+
+        res.json({
+            results: matchedEpisodes,
+            explanation: aiResult.explanation || ''
+        });
+
+    } catch (err) {
+        console.error('AI search error:', err.message);
+        // Surface Groq rate-limit errors clearly to the user
+        if (err.message.includes('rate_limit_exceeded')) {
+            return res.status(429).json({ error: 'Groq rate limit hit — wait a moment and try again.' });
+        }
+        res.status(500).json({ error: 'AI search failed: ' + err.message });
     }
 });
 
