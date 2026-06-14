@@ -1001,6 +1001,44 @@ Return JSON.`
     }
 });
 
+// ════════════════════════════════════════════════════════════
+// GEO PROXY  — browser can't call ip-api directly due to CORS;
+// the server makes the request instead and forwards the result.
+// ════════════════════════════════════════════════════════════
+
+// GET /api/geo  →  { countryCode: "BG", countryName: "Bulgaria" }
+app.get('/api/geo', async (req, res) => {
+    // Use the real client IP, not the loopback address.
+    // X-Forwarded-For is set by proxies; fall back to req.ip.
+    const clientIp =
+        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+        req.socket.remoteAddress ||
+        '';
+
+    // When running on localhost the IP will be 127.0.0.1 / ::1 —
+    // ip-api returns a special "localhost" result in that case,
+    // so we omit the ip parameter and let the service auto-detect
+    // from the server's own outgoing IP (which IS the user's machine).
+    const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '';
+    const url = isLocal
+        ? 'http://ip-api.com/json/?fields=status,country,countryCode'
+        : `http://ip-api.com/json/${clientIp}?fields=status,country,countryCode`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.status !== 'success') {
+            return res.status(502).json({ error: 'Geo lookup failed' });
+        }
+
+        res.json({ countryCode: data.countryCode, countryName: data.country });
+    } catch (err) {
+        console.error('Geo proxy error:', err.message);
+        res.status(502).json({ error: 'Geo lookup unavailable' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });

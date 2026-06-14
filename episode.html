@@ -155,37 +155,16 @@
                 <div class="tardis-blue p-4 text-white">
                     <h3 class="font-bold flex items-center justify-between text-sm">
                         Streaming Passport 
-                        <span class="text-[9px] bg-white/20 px-2 py-1 rounded uppercase tracking-tighter">Automatic Location</span>
+                        <span id="passport-location-badge" class="text-[9px] bg-white/20 px-2 py-1 rounded uppercase tracking-tighter">Detecting…</span>
                     </h3>
                 </div>
-                <div class="p-6 space-y-5">
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <p class="text-[10px] font-bold text-green-600 uppercase">Available Locally (UK)</p>
-                        </div>
-                        <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-[10px] text-white font-bold">iP</div>
-                                <span class="text-sm font-semibold">BBC iPlayer</span>
-                            </div>
-                            <span class="text-xs font-black text-blue-900">FREE</span>
-                        </div>
-                    </div>
-                    <div>
-                        <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">Global Streaming</p>
-                        <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100 opacity-75">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-[10px] text-white font-bold">D+</div>
-                                <span class="text-sm font-semibold">Disney+</span>
-                            </div>
-                            <span class="text-xs font-black text-gray-900">$13.99/mo</span>
-                        </div>
-                        <p class="text-[9px] text-orange-600 mt-2 font-bold uppercase">VPN Required</p>
-                    </div>
-                    <div class="pt-4 border-t border-gray-100">
-                        <p class="text-[9px] text-gray-400 italic text-center">
-                            Streaming data is based on your current IP address. 
-                        </p>
+                <div id="passport-body" class="p-6 space-y-5">
+                    <!-- Skeleton loader -->
+                    <div class="animate-pulse space-y-3">
+                        <div class="h-3 bg-gray-100 rounded w-1/3"></div>
+                        <div class="h-14 bg-gray-100 rounded-xl"></div>
+                        <div class="h-3 bg-gray-100 rounded w-1/4 mt-4"></div>
+                        <div class="h-14 bg-gray-100 rounded-xl opacity-60"></div>
                     </div>
                 </div>
             </div>
@@ -198,11 +177,7 @@
                 </div>
             </div>
 
-            <!-- Extra Info Widget -->
-            <div id="ep-extra" class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3 hidden">
-                <h4 class="text-[10px] font-black text-gray-500 uppercase mb-1">Episode Info</h4>
-                <div id="ep-extra-content" class="space-y-2 text-sm text-gray-700"></div>
-            </div>
+
 
         </div>
     </main>
@@ -510,22 +485,6 @@
                     statusEl.textContent = 'FULL EPISODE AVAILABLE';
                 }
 
-                const extras = [];
-                if (ep.doctor_num)   extras.push({ label: 'Doctor',  value: ep.doctor_num });
-                if (ep.story_title)  extras.push({ label: 'Story',   value: ep.story_title });
-                if (ep.series_name)  extras.push({ label: 'Series',  value: ep.series_name });
-                if (ep.episode_identifier) extras.push({ label: 'ID', value: ep.episode_identifier });
-
-                if (extras.length) {
-                    document.getElementById('ep-extra').classList.remove('hidden');
-                    document.getElementById('ep-extra-content').innerHTML = extras.map(e =>
-                        `<div class="flex justify-between">
-                            <span class="text-[10px] font-black text-gray-400 uppercase">${e.label}</span>
-                            <span class="font-semibold">${e.value}</span>
-                        </div>`
-                    ).join('');
-                }
-
                 // Load user-specific data in parallel
                 await Promise.all([loadFavouriteState(), loadNote()]);
 
@@ -536,12 +495,134 @@
             }
         }
 
+        // ── Streaming Passport ─────────────────────────────────────────
+        // Streaming availability map keyed by ISO 3166-1 alpha-2 country code.
+        // Each service: { name, logo (CSS class + text), bg, local: true/false, price, vpnNote }
+        const STREAMING_DATA = {
+            // BBC iPlayer — UK only (free)
+            UK_IPLAYER: {
+                name: 'BBC iPlayer',
+                abbr: 'iP', bg: 'bg-black',
+                price: 'FREE',
+                priceClass: 'text-blue-900',
+                countries: ['GB'],
+                vpnFrom: true   // available via VPN from anywhere
+            },
+            // BritBox — many countries
+            BRITBOX: {
+                name: 'BritBox',
+                abbr: 'BB', bg: 'bg-yellow-500',
+                price: 'Subscription',
+                priceClass: 'text-gray-900',
+                countries: ['US','CA','AU','NZ','SE','DK','NO','FI','IE','IN','ZA'],
+                vpnFrom: false
+            },
+            // Disney+ — carries newer Who in many markets
+            DISNEY_PLUS: {
+                name: 'Disney+',
+                abbr: 'D+', bg: 'bg-blue-600',
+                price: 'Subscription',
+                priceClass: 'text-gray-900',
+                countries: [
+                    'US','CA','AU','NZ','GB','IE','DE','FR','ES','IT','NL','BE',
+                    'PT','AT','CH','PL','CZ','HU','RO','GR','HR','SK','SI','LT',
+                    'LV','EE','FI','SE','DK','NO','JP','KR','SG','MY','TH','PH',
+                    'TW','HK','IN','ZA','BR','MX','AR','CL','CO','PE','HN','GT',
+                    'SV','DO','CR','PA','PY','UY','BO','EC','VE','JM','TT','BG'],
+                vpnFrom: false
+            }
+        };
+
+        // Given a country code, build the list of available / vpn-required services
+        function buildPassportHTML(countryCode, countryName) {
+            const local   = [];
+            const vpnOnly = [];
+
+            for (const svc of Object.values(STREAMING_DATA)) {
+                const isLocal = svc.countries.includes(countryCode);
+                if (isLocal) {
+                    local.push(svc);
+                } else {
+                    // VPN: iPlayer is always reachable via UK VPN; others not necessarily
+                    if (svc.vpnFrom || svc.name === 'BBC iPlayer') vpnOnly.push(svc);
+                    else vpnOnly.push(svc);
+                }
+            }
+
+            const serviceCard = (svc, dimmed = false) => `
+                <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100 ${dimmed ? 'opacity-70' : ''}">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 ${svc.bg} rounded-lg flex items-center justify-center text-[10px] text-white font-bold">${svc.abbr}</div>
+                        <span class="text-sm font-semibold">${svc.name}</span>
+                    </div>
+                    <span class="text-xs font-black ${svc.priceClass}">${svc.price}</span>
+                </div>`;
+
+            let html = '';
+
+            if (local.length) {
+                html += `<div>
+                    <p class="text-[10px] font-bold text-green-600 uppercase mb-2">Available in ${countryName}</p>
+                    <div class="space-y-2">${local.map(s => serviceCard(s)).join('')}</div>
+                </div>`;
+            } else {
+                html += `<div>
+                    <p class="text-[10px] font-bold text-orange-500 uppercase mb-2">Not available in ${countryName}</p>
+                    <p class="text-xs text-gray-400">No direct streaming in your region.</p>
+                </div>`;
+            }
+
+            const vpnServices = vpnOnly.filter(s => !local.includes(s));
+            if (vpnServices.length) {
+                html += `<div>
+                    <p class="text-[10px] font-bold text-gray-400 uppercase mb-2">VPN required</p>
+                    <div class="space-y-2">${vpnServices.map(s => serviceCard(s, true)).join('')}</div>
+                    <p class="text-[9px] text-orange-600 mt-2 font-bold uppercase"></p>
+                </div>`;
+            }
+
+            html += `<div class="pt-4 border-t border-gray-100">
+                <p class="text-[9px] text-gray-400 italic text-center">
+                    Based on your IP location: ${countryName}
+                </p>
+            </div>`;
+
+            return html;
+        }
+
+        async function loadStreamingPassport() {
+            const badge = document.getElementById('passport-location-badge');
+            const body  = document.getElementById('passport-body');
+
+            try {
+                // Call our own server — no CORS issues, server calls ip-api on our behalf
+                const geo = await fetch(`${API}/geo`).then(r => r.json());
+
+                if (!geo.countryCode) throw new Error('no data');
+
+                badge.textContent = geo.countryName;
+                body.innerHTML = buildPassportHTML(geo.countryCode, geo.countryName);
+            } catch (e) {
+                badge.textContent = 'Unknown';
+                body.innerHTML = `
+                    <p class="text-xs text-gray-400 text-center py-4">
+                        Could not detect your location. Make sure the server is running.
+                    </p>
+                    <div class="pt-4 border-t border-gray-100">
+                        <p class="text-[9px] text-gray-400 italic text-center">Location detection unavailable</p>
+                    </div>`;
+            }
+        }
+
         // Close modal on backdrop click
         document.getElementById('modal-create-playlist').addEventListener('click', function(e) {
             if (e.target === this) closeCreatePlaylistModal();
         });
 
-        window.onload = loadEpisode;
+        window.onload = () => {
+            loadEpisode();
+            loadStreamingPassport();
+        };
     </script>
 </body>
 </html>
