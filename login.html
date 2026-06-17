@@ -212,8 +212,8 @@
                     <div class="flex-1 h-px bg-gray-200"></div>
                 </div>
                 <button onclick="continueAsGuest()"
-                    class="w-full max-w-md py-3 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-500
-                           hover:border-blue-200 hover:text-blue-900 hover:bg-blue-50 transition active:scale-[0.98]">
+                    class="w-full max-w-md py-3 rounded-xl border-2 border-blue-900 text-sm font-bold text-blue-900 bg-blue-50
+                           hover:bg-blue-100 hover:border-blue-900 transition active:scale-[0.98]">
                     👤 Continue as Guest
                     <span class="block text-[10px] font-normal text-gray-400 mt-0.5">Browse the archive without an account</span>
                 </button>
@@ -221,12 +221,12 @@
 
             <!-- What you get with an account -->
             <div class="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-5">
-                <p class="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">With an account you'll get</p>
+                <p class="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-3">With an account you can</p>
                 <ul class="space-y-2 text-xs text-blue-800">
-                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Save episodes to custom playlists</li>
-                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Write personal notes on episodes</li>
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Save episodes to favourites and custom playlists</li>
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Leave personal notes for every episode</li>
                     <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Track which episodes you've watched</li>
-                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Your own Gallifrey Archive profile</li>
+                    <li class="flex items-center gap-2"><span class="text-blue-400">◆</span> Have your own Gallifrey Archive profile :)</li>
                 </ul>
             </div>
 
@@ -381,7 +381,7 @@
             const password = document.getElementById('reg-password').value;
 
             if (!username || !email || !password) {
-                showError('Please fill in all three fields.');
+                showError('Please fill in all required fields.');
                 return;
             }
 

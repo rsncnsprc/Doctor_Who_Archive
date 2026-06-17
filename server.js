@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 
-// ── Load GROQ_API_KEY from api_key.env ───────────────────────
+// load groq api key
 let GROQ_API_KEY = '';
 try {
     const envPath = path.join(__dirname, 'api_key.env');
@@ -23,11 +23,12 @@ const PORT = 5000;
 const JWT_SECRET = 'change_this_to_a_long_random_secret_before_going_public';
 const JWT_EXPIRES_IN = '7d';
 
+// middleware setup
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
-// ── Database connection ──────────────────────────────────────
+// database connection and verification
 const pool = new Pool({
     host: 'localhost',
     port: 5432,
@@ -36,6 +37,7 @@ const pool = new Pool({
     password: '31415'
 });
 
+// test the connection on startup
 pool.connect((err, client, release) => {
     if (err) {
         console.error('Database connection failed:', err.message);
@@ -45,13 +47,13 @@ pool.connect((err, client, release) => {
     }
 });
 
-// ── Auth middleware ──────────────────────────────────────────
+// auth middleware — check authorization header, validates jwt, and attaches user to request
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
-    const token = authHeader.slice(7);
+    const token = authHeader.slice(7); // extract token after 'Bearer '
     try {
         req.user = jwt.verify(token, JWT_SECRET);
         next();
@@ -60,9 +62,42 @@ function requireAuth(req, res, next) {
     }
 }
 
-// ── POST /api/auth/register ──────────────────────────────────
+function normalizeProfilePictureUrl(value) {
+    if (value === undefined || value === null) return null;
+    const trimmed = String(value).trim();
+    if (trimmed.length === 0) return null;
+    if (trimmed.length > 2048) {
+        throw new Error('Profile picture URL must be 2048 characters or fewer');
+    }
+    return trimmed;
+}
+
+function formatUser(row) {
+    return {
+        user_id: row.user_id,
+        username: row.username,
+        email: row.email,
+        created_at: row.created_at,
+        profile_picture_url: row.profile_picture_url || null
+    };
+}
+
+function seriesClauseForTab(tab, alias = 'sr.series_name') {
+    if (tab === 'Classic') {
+        return { clause: ` AND ${alias} = $2`, params: ['Classic'] };
+    }
+    if (tab === 'Modern') {
+        return { clause: ` AND ${alias} = $2`, params: ['Modern'] };
+    }
+    if (tab === 'New') {
+        return { clause: ` AND ${alias} = $2`, params: ['NewEra'] };
+    }
+    return { clause: '', params: [] };
+}
+
+// post api/auth/register
 app.post('/api/auth/register', async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, profile_picture_url } = req.body;
 
     if (!username || !email || !password) {
         return res.status(400).json({ error: 'Username, email and password are all required' });
@@ -77,7 +112,15 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
+    let normalizedProfilePictureUrl;
     try {
+        normalizedProfilePictureUrl = normalizeProfilePictureUrl(profile_picture_url);
+    } catch (err) {
+        return res.status(400).json({ error: err.message });
+    }
+
+    try {
+        // check if username or email already exists (case-insensitive)
         const existing = await pool.query(
             'SELECT user_id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($2)',
             [username, email]
@@ -86,11 +129,12 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(409).json({ error: 'That username or email is already registered' });
         }
 
+        // hash password with bcrypt (cost factor: 12)
         const password_hash = await bcrypt.hash(password, 12);
 
         const result = await pool.query(
-            'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING user_id, username, email, created_at',
-            [username, email, password_hash]
+            'INSERT INTO users (username, email, password_hash, profile_picture_url) VALUES ($1, $2, $3, $4) RETURNING user_id, username, email, created_at, profile_picture_url',
+            [username, email, password_hash, normalizedProfilePictureUrl]
         );
 
         const user = result.rows[0];
@@ -102,7 +146,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         res.status(201).json({
             token,
-            user: { user_id: user.user_id, username: user.username, email: user.email, created_at: user.created_at }
+            user: formatUser(user)
         });
 
     } catch (err) {
@@ -111,7 +155,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// ── POST /api/auth/login ─────────────────────────────────────
+// post /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
     const { identifier, password } = req.body;
 
@@ -120,6 +164,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     try {
+        // find user by email or username (not case sensitive)
         const result = await pool.query(
             'SELECT * FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)',
             [identifier]
@@ -130,6 +175,7 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         const user = result.rows[0];
+        // verify password against stored hash
         const passwordMatch = await bcrypt.compare(password, user.password_hash);
 
         if (!passwordMatch) {
@@ -144,7 +190,7 @@ app.post('/api/auth/login', async (req, res) => {
 
         res.json({
             token,
-            user: { user_id: user.user_id, username: user.username, email: user.email, created_at: user.created_at }
+            user: formatUser(user)
         });
 
     } catch (err) {
@@ -153,28 +199,48 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// ── GET /api/auth/me ─────────────────────────────────────────
+// get /api/auth/me
 app.get('/api/auth/me', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(
-            'SELECT user_id, username, email, created_at FROM users WHERE user_id = $1',
+            'SELECT user_id, username, email, created_at, profile_picture_url FROM users WHERE user_id = $1',
             [req.user.user_id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
-        res.json({ user: result.rows[0] });
+        res.json({ user: formatUser(result.rows[0]) });
     } catch (err) {
         res.status(500).json({ error: 'Could not fetch user' });
     }
 });
 
+// put /api/auth/me — update profile picture
+app.put('/api/auth/me', requireAuth, async (req, res) => {
+    let normalizedProfilePictureUrl;
+    try {
+        normalizedProfilePictureUrl = normalizeProfilePictureUrl(req.body.profile_picture_url);
+    } catch (err) {
+        return res.status(400).json({ error: err.message });
+    }
 
-// ════════════════════════════════════════════════════════════
-// FAVOURITES
-// ════════════════════════════════════════════════════════════
+    try {
+        const result = await pool.query(
+            'UPDATE users SET profile_picture_url = $1 WHERE user_id = $2 RETURNING user_id, username, email, created_at, profile_picture_url',
+            [normalizedProfilePictureUrl, req.user.user_id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ user: formatUser(result.rows[0]) });
+    } catch (err) {
+        console.error('Update profile error:', err.message);
+        res.status(500).json({ error: 'Could not update profile picture' });
+    }
+});
 
-// GET /api/favourites — get all favourites for the logged-in user
+
+// get all favourites for the logged-in user
 app.get('/api/favourites', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -251,9 +317,114 @@ app.delete('/api/favourites/:episodeId', requireAuth, async (req, res) => {
 });
 
 
-// ════════════════════════════════════════════════════════════
-// PLAYLISTS
-// ════════════════════════════════════════════════════════════
+// watched episodes
+
+// GET /api/watched — all watched episodes for the logged-in user, optionally scoped by tab
+app.get('/api/watched', requireAuth, async (req, res) => {
+    try {
+        const tab = req.query.tab;
+        const { clause, params: seriesParams } = seriesClauseForTab(tab);
+
+        const statsResult = await pool.query(`
+            SELECT
+                COUNT(e.episode_id)::int AS total_count,
+                COUNT(we.watched_id)::int AS watched_count
+            FROM episodes e
+            LEFT JOIN seasons se ON e.season_id = se.season_id
+            LEFT JOIN series sr ON se.series_id = sr.series_id
+            LEFT JOIN watched_episodes we
+                ON we.episode_id = e.episode_id
+               AND we.user_id = $1
+            WHERE 1=1${clause}
+        `, [req.user.user_id, ...seriesParams]);
+
+        const watchedResult = await pool.query(`
+            SELECT we.watched_id, we.watched_at,
+                   e.episode_id, e.episode_title, e.year_released, e.doctor_num,
+                   e.imdb_rating, e.is_missing, e.plot_summary,
+                   se.season_number, sr.series_name
+            FROM watched_episodes we
+            JOIN episodes e ON e.episode_id = we.episode_id
+            LEFT JOIN seasons se ON e.season_id = se.season_id
+            LEFT JOIN series sr ON se.series_id = sr.series_id
+            WHERE we.user_id = $1${clause}
+            ORDER BY we.watched_at DESC, e.year_released ASC NULLS LAST, se.season_number ASC NULLS LAST
+        `, [req.user.user_id, ...seriesParams]);
+
+        const stats = statsResult.rows[0] || { total_count: 0, watched_count: 0 };
+        const watchedCount = Number(stats.watched_count) || 0;
+        const totalCount = Number(stats.total_count) || 0;
+
+        res.json({
+            episodes: watchedResult.rows,
+            stats: {
+                watched_count: watchedCount,
+                total_count: totalCount,
+                percentage: totalCount > 0 ? Math.round((watchedCount / totalCount) * 100) : 0
+            }
+        });
+    } catch (err) {
+        console.error('Get watched error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch watched episodes' });
+    }
+});
+
+// GET /api/watched/ids — just the episode IDs (for quick button state check)
+app.get('/api/watched/ids', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT episode_id FROM watched_episodes WHERE user_id = $1',
+            [req.user.user_id]
+        );
+        res.json(result.rows.map(r => r.episode_id));
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch watched IDs' });
+    }
+});
+
+// POST /api/watched/:episodeId — toggle watched
+app.post('/api/watched/:episodeId', requireAuth, async (req, res) => {
+    const episodeId = parseInt(req.params.episodeId);
+    try {
+        const existing = await pool.query(
+            'SELECT watched_id FROM watched_episodes WHERE user_id = $1 AND episode_id = $2',
+            [req.user.user_id, episodeId]
+        );
+
+        if (existing.rows.length > 0) {
+            await pool.query(
+                'DELETE FROM watched_episodes WHERE user_id = $1 AND episode_id = $2',
+                [req.user.user_id, episodeId]
+            );
+            res.json({ watched: false });
+        } else {
+            await pool.query(
+                'INSERT INTO watched_episodes (user_id, episode_id) VALUES ($1, $2)',
+                [req.user.user_id, episodeId]
+            );
+            res.json({ watched: true });
+        }
+    } catch (err) {
+        console.error('Toggle watched error:', err.message);
+        res.status(500).json({ error: 'Failed to toggle watched state' });
+    }
+});
+
+// DELETE /api/watched/:episodeId — explicitly remove watched state
+app.delete('/api/watched/:episodeId', requireAuth, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM watched_episodes WHERE user_id = $1 AND episode_id = $2',
+            [req.user.user_id, parseInt(req.params.episodeId)]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to remove watched state' });
+    }
+});
+
+
+// playlists
 
 // GET /api/playlists — all playlists for the logged-in user
 app.get('/api/playlists', requireAuth, async (req, res) => {
@@ -361,7 +532,7 @@ app.delete('/api/playlists/:id', requireAuth, async (req, res) => {
 // POST /api/playlists/:id/episodes/:episodeId — add episode to playlist
 app.post('/api/playlists/:id/episodes/:episodeId', requireAuth, async (req, res) => {
     try {
-        // Verify ownership
+        // verify user owns this playlist before allowing episode to be added
         const pl = await pool.query(
             'SELECT playlist_id FROM playlists WHERE playlist_id = $1 AND user_id = $2',
             [req.params.id, req.user.user_id]
@@ -414,9 +585,7 @@ app.get('/api/playlists/episode/:episodeId', requireAuth, async (req, res) => {
 });
 
 
-// ════════════════════════════════════════════════════════════
-// EPISODE NOTES
-// ════════════════════════════════════════════════════════════
+// episode notes
 
 // GET /api/notes — all notes for the logged-in user
 app.get('/api/notes', requireAuth, async (req, res) => {
@@ -458,6 +627,7 @@ app.post('/api/notes/:episodeId', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'Note text cannot be empty' });
     }
     try {
+        // upsert: insert new note or update existing one for this episode
         const result = await pool.query(`
             INSERT INTO episode_notes (user_id, episode_id, note_text, updated_at)
             VALUES ($1, $2, $3, NOW())
@@ -486,9 +656,7 @@ app.delete('/api/notes/:episodeId', requireAuth, async (req, res) => {
 });
 
 
-// ════════════════════════════════════════════════════════════
-// Existing episode routes — unchanged
-// ════════════════════════════════════════════════════════════
+// existing episode routes — unchanged
 
 // GET /api/episodes
 app.get('/api/episodes', async (req, res) => {
@@ -562,7 +730,14 @@ app.get('/api/episodes', async (req, res) => {
             idx++;
         }
 
-        query += ` ORDER BY e.episode_id ASC`;
+        query += ` ORDER BY
+            e.year_released ASC NULLS LAST,
+            se.season_number ASC NULLS LAST,
+            CASE
+                WHEN e.episode_identifier ~ '^[0-9]+$' THEN e.episode_identifier::int
+                ELSE 9999
+            END ASC,
+            e.episode_id ASC`;
 
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -660,8 +835,8 @@ app.get('/api/filter-options', async (req, res) => {
             seriesFilter = `AND sr.series_name = 'NewEra'`;
         }
 
-        // ── Doctors list ─────────────────────────────────────────
-        // When a season is selected, only return doctors that appear in that season
+        // doctors list
+        // when a season is selected, only return doctors that appear in that season
         const doctorParams = [];
         let doctorSeasonClause = '';
         if (season) {
@@ -681,8 +856,8 @@ app.get('/api/filter-options', async (req, res) => {
             ORDER BY e.doctor_num
         `, doctorParams);
 
-        // ── Seasons list ─────────────────────────────────────────
-        // When a doctor is selected, only return seasons that doctor appears in
+        // seasons list
+        // when a doctor is selected, only return seasons that doctor appears in
         const seasonParams = [];
         let seasonDoctorClause = '';
         if (doctor) {
@@ -717,19 +892,16 @@ app.get('/api/filter-options', async (req, res) => {
     }
 });
 
-// ════════════════════════════════════════════════════════════
-// AI SEARCH  (Groq — free tier, llama-3.3-70b-versatile)
-// ════════════════════════════════════════════════════════════
+// ai search  (groq — free tier, llama-3.3-70b-versatile)
 
-// POST /api/ai-search
-// Body: { query: string, tab?: string }
-// Returns: { results: Episode[], explanation: string }
+// post /api/ai-search
+// body: { query: string, tab?: string }
+// returns: { results: Episode[], explanation: string }
 //
-// Strategy: avoid token limit by pre-filtering in SQL before sending to Groq.
-// Step 1 — Ask Groq (cheaply) to extract search intent: keywords, mood, setting,
-//           companions to include/exclude, etc.
-// Step 2 — Use that intent to build a SQL query that pulls a small candidate set.
-// Step 3 — Ask Groq to rank/confirm those candidates against the original query.
+// strategy: use groq to parse intent and rank results, but keep token usage low by pre-filtering in sql.
+// step 1 — ask groq to extract search intent (keywords, mood, setting, companions, etc.)
+// step 2 — use that intent to build a sql where clause, fetching only ~30-60 candidate episodes
+// step 3 — ask groq to rank/confirm those small candidate set against the original query
 app.post('/api/ai-search', async (req, res) => {
     if (!GROQ_API_KEY) {
         return res.status(503).json({ error: 'AI search is not configured. Please add GROQ_API_KEY to api_key.env' });
@@ -740,7 +912,7 @@ app.post('/api/ai-search', async (req, res) => {
         return res.status(400).json({ error: 'Query is required' });
     }
 
-    // Helper: call Groq with a small prompt
+    // helper function: call groq api with structured messages
     async function callGroq(messages, maxTokens = 512) {
         const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -768,7 +940,7 @@ app.post('/api/ai-search', async (req, res) => {
     }
 
     try {
-        // ── Step 1: Intent extraction (tiny prompt, ~200 tokens) ────────────
+        // step 1: intent extraction (tiny prompt, ~200 tokens)
         // Ask the model to parse the query into structured search intent.
         const intentRaw = await callGroq([
             {
@@ -799,7 +971,7 @@ Return ONLY valid JSON, no markdown. Schema:
             intent = { keywords: query.trim().split(/\s+/) };
         }
 
-        // ── Step 2: SQL pre-filter — pull candidate episodes ────────────────
+        // step 2: sql pre-filter — pull candidate episodes
         // Build a broad WHERE clause from the extracted intent so we only
         // send ~30-60 rows to Groq instead of the full table.
         const params = [];
@@ -903,8 +1075,8 @@ Return ONLY valid JSON, no markdown. Schema:
 
         let candidates = (await pool.query(candidateSQL, params)).rows;
 
-        // If SQL found nothing (very abstract query), grab a broad random sample
-        // so Groq still has something to work with
+        // if sql found nothing (e.g. very abstract or niche query), grab a random sample
+        // to give groq some episodes to work with
         if (candidates.length === 0) {
             const fallbackParams = [];
             let fallbackWhere = '1=1';
@@ -940,7 +1112,7 @@ Return ONLY valid JSON, no markdown. Schema:
             return res.json({ results: [], explanation: 'No episodes found in this era.' });
         }
 
-        // ── Step 3: Ask Groq to rank the small candidate set ────────────────
+        // step 3: ask groq to rank the small candidate set
         // Compact representation — strip plot_summary to 120 chars to save tokens
         const catalogue = candidates.map(ep => ({
             id:  ep.episode_id,
@@ -1001,25 +1173,22 @@ Return JSON.`
     }
 });
 
-// ════════════════════════════════════════════════════════════
-// GEO PROXY  — browser can't call ip-api directly due to CORS;
+// geo proxy  — browser can't call ip-api directly due to cors;
 // the server makes the request instead and forwards the result.
-// ════════════════════════════════════════════════════════════
 
 // GET /api/geo  →  { countryCode: "BG", countryName: "Bulgaria" }
 app.get('/api/geo', async (req, res) => {
-    // Use the real client IP, not the loopback address.
-    // X-Forwarded-For is set by proxies; fall back to req.ip.
+    // extract the real client ip from request (may be behind a proxy)
     const clientIp =
         (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
         req.socket.remoteAddress ||
         '';
 
-    // When running on localhost the IP will be 127.0.0.1 / ::1 —
-    // ip-api returns a special "localhost" result in that case,
-    // so we omit the ip parameter and let the service auto-detect
-    // from the server's own outgoing IP (which IS the user's machine).
+    // when running on localhost, ip-api returns a special result based on the server's ip
+    // so we omit the ip parameter and let ip-api auto-detect from our outgoing connection
+    // check if running locally
     const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '';
+    // ip-api url: omit ip parameter for localhost (auto-detect), provide ip for production
     const url = isLocal
         ? 'http://ip-api.com/json/?fields=status,country,countryCode'
         : `http://ip-api.com/json/${clientIp}?fields=status,country,countryCode`;

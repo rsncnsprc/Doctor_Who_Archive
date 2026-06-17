@@ -13,6 +13,8 @@
         .btn-action:hover { transform: scale(1.1); }
         .btn-active-fav { background: #fef2f2 !important; border-color: #fecaca !important; }
         .btn-active-fav svg { fill: #ef4444; stroke: #ef4444; }
+        .btn-active-watched { background: #f0fdf4 !important; border-color: #bbf7d0 !important; }
+        .btn-active-watched svg { fill: none; stroke: #16a34a; }
 
         /* Playlist dropdown */
         #playlist-dropdown { display: none; }
@@ -105,6 +107,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Watched Button -->
+                    <button id="btn-watched" class="btn-action bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm text-green-600 hover:bg-green-50 text-sm font-bold flex items-center gap-2"
+                            title="Mark as Watched" onclick="toggleWatched()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span id="btn-watched-label">Mark watched</span>
+                    </button>
                 </div>
             </section>
 
@@ -122,7 +133,7 @@
             </section>
 
             <!-- Notes Section -->
-            <section id="notes-section" class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+            <section id="notes-section" class="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest">My Note</h3>
                     <span id="note-status" class="text-[10px] font-bold text-gray-400 uppercase"></span>
@@ -134,7 +145,7 @@
                 <div id="notes-editor" class="hidden">
                     <textarea id="note-textarea" 
                         class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                        placeholder="Write your thoughts on this episode..."></textarea>
+                        placeholder="Leave a note for this episode..."></textarea>
                     <div class="flex justify-between items-center mt-3">
                         <button id="btn-delete-note" onclick="deleteNote()" class="hidden text-[10px] font-black text-red-500 hover:text-red-700 uppercase">Delete Note</button>
                         <div class="flex gap-3 ml-auto">
@@ -240,6 +251,7 @@
 
         // ── Favourite ──────────────────────────────────────────────────
         let isFavourited = false;
+        let isWatched = false;
 
         async function loadFavouriteState() {
             if (!isLoggedIn()) return;
@@ -276,6 +288,47 @@
                 showToast(isFavourited ? 'Added to Favourites' : 'Removed from Favourites');
             } catch {
                 showToast('Could not update favourites');
+            }
+        }
+
+        async function loadWatchedState() {
+            if (!isLoggedIn()) return;
+            try {
+                const ids = await fetch(`${API}/watched/ids`, { headers: authHeaders() }).then(r => r.json());
+                isWatched = ids.includes(parseInt(currentEpisodeId));
+                updateWatchedBtn();
+            } catch {}
+        }
+
+        function updateWatchedBtn() {
+            const btn = document.getElementById('btn-watched');
+            const label = document.getElementById('btn-watched-label');
+            if (isWatched) {
+                btn.classList.add('btn-active-watched');
+                btn.title = 'Remove from Watched';
+                if (label) label.textContent = 'Watched';
+            } else {
+                btn.classList.remove('btn-active-watched');
+                btn.title = 'Mark as Watched';
+                if (label) label.textContent = 'Mark watched';
+            }
+        }
+
+        async function toggleWatched() {
+            if (!isLoggedIn()) {
+                window.location.href = `login.html?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+                return;
+            }
+            try {
+                const res = await fetch(`${API}/watched/${currentEpisodeId}`, {
+                    method: 'POST',
+                    headers: authHeaders()
+                }).then(r => r.json());
+                isWatched = res.watched;
+                updateWatchedBtn();
+                showToast(isWatched ? 'Marked as watched' : 'Removed from watched');
+            } catch {
+                showToast('Could not update watched state');
             }
         }
 
@@ -406,7 +459,7 @@
 
                 if (note && note.note_text) {
                     document.getElementById('note-textarea').value = note.note_text;
-                    document.getElementById('note-status').textContent = `Last saved ${new Date(note.updated_at).toLocaleDateString()}`;
+                    document.getElementById('note-status').textContent = `Last edited ${new Date(note.updated_at).toLocaleDateString()}`;
                     document.getElementById('btn-delete-note').classList.remove('hidden');
                 }
             } catch {}
@@ -421,7 +474,7 @@
                     headers: authHeaders(),
                     body: JSON.stringify({ note_text: text })
                 }).then(r => r.json());
-                document.getElementById('note-status').textContent = `Saved ${new Date(note.updated_at).toLocaleDateString()}`;
+                document.getElementById('note-status').textContent = `Edited on ${new Date(note.updated_at).toLocaleDateString()}`;
                 document.getElementById('btn-delete-note').classList.remove('hidden');
                 showToast('✓ Note saved');
             } catch {
@@ -486,7 +539,7 @@
                 }
 
                 // Load user-specific data in parallel
-                await Promise.all([loadFavouriteState(), loadNote()]);
+                await Promise.all([loadFavouriteState(), loadWatchedState(), loadNote()]);
 
             } catch (err) {
                 console.error('Failed to load episode:', err);

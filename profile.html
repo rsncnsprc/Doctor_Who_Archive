@@ -43,6 +43,32 @@
         /* Playlist expanded panel */
         .playlist-episodes { display: none; }
         .playlist-episodes.open { display: block; }
+
+        .avatar-surface {
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .avatar-edit-trigger {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .avatar-shell:hover .avatar-edit-trigger,
+        .avatar-shell:focus-within .avatar-edit-trigger {
+            opacity: 1;
+        }
+
+        .avatar-editor-panel {
+            position: fixed;
+            top: 88px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(92vw, 560px);
+            z-index: 60;
+        }
     </style>
 </head>
 <body class="bg-gray-50 font-sans text-gray-900">
@@ -70,9 +96,9 @@
 
         <!-- Not logged in state -->
         <div id="not-logged-in" class="hidden text-center py-24">
-            <div class="text-5xl mb-4">🔒</div>
+            <div class="text-5xl mb-4"></div>
             <h2 class="text-xl font-black text-blue-900 mb-2">Sign in to view your profile</h2>
-            <p class="text-gray-400 mb-6 text-sm">Your favourites, playlists and notes are waiting.</p>
+                    <p class="text-gray-400 mb-6 text-sm">Your favourites, playlists, watched episodes and notes are waiting.</p>
             <button onclick="location.href='login.html?redirect=profile.html'" class="tardis-blue text-white px-6 py-3 rounded-xl font-bold text-sm hover:opacity-90 transition">
                 Sign In →
             </button>
@@ -83,7 +109,15 @@
 
             <!-- User Info Header -->
             <div class="bg-white rounded-xl shadow-sm p-8 mb-8 flex flex-col md:flex-row items-center gap-6 border border-gray-200">
-                <div id="avatar" class="w-24 h-24 tardis-blue rounded-full flex items-center justify-center text-4xl font-black text-white shadow-inner">?</div>
+                <button id="avatar-shell" onclick="openAvatarEditor()" class="avatar-shell group relative w-24 h-24 rounded-full focus:outline-none focus:ring-4 focus:ring-blue-200 flex-shrink-0">
+                    <div id="avatar" class="avatar-surface w-24 h-24 tardis-blue rounded-full flex items-center justify-center text-4xl font-black text-white shadow-inner border border-gray-100">?</div>
+                    <div class="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/25 transition"></div>
+                    <div class="avatar-edit-trigger absolute inset-0 rounded-full flex items-center justify-center text-white">
+                        <div class="w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                            ✎
+                        </div>
+                    </div>
+                </button>
                 <div class="text-center md:text-left flex-1">
                     <h2 id="profile-username" class="text-3xl font-black text-blue-900">Loading...</h2>
                     <p id="profile-since" class="text-gray-400 text-sm mt-1">Member since...</p>
@@ -95,14 +129,38 @@
                 </div>
             </div>
 
-            <!-- Profile Tabs -->
-            <div class="flex border-b border-gray-200 mb-8 overflow-x-auto">
-                <button onclick="switchTab('favourites')" id="tab-favourites" class="px-8 py-4 tab-active whitespace-nowrap">❤️ Favourites</button>
-                <button onclick="switchTab('playlists')"  id="tab-playlists"  class="px-8 py-4 text-gray-400 whitespace-nowrap">Playlists</button>
-                <button onclick="switchTab('notes')"      id="tab-notes"      class="px-8 py-4 text-gray-400 whitespace-nowrap">Notes</button>
+            <div id="avatar-editor" class="avatar-editor-panel hidden">
+                <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
+                    <div class="flex items-start justify-between gap-4 mb-4">
+                        <div>
+                            <h3 class="text-base font-black text-blue-900">Profile Picture</h3>
+                            <p class="text-xs text-gray-400 mt-1">Use a direct image link</p>
+                        </div>
+                        <button onclick="closeAvatarEditor()" class="text-gray-400 hover:text-gray-700 text-sm font-bold">Close</button>
+                    </div>
+                    <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Image URL</label>
+                    <input id="profile-picture-url" type="url" placeholder="https://example.com/avatar.jpg"
+                        class="w-full p-3 rounded-xl border border-gray-200 text-sm bg-gray-50 focus:outline-none focus:border-blue-400 transition">
+                    <div class="flex gap-3 mt-4">
+                        <button onclick="clearProfilePicture()" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold text-gray-500 hover:bg-gray-50 transition">Remove</button>
+                        <div class="flex-1"></div>
+                        <button onclick="saveProfilePicture()" class="tardis-blue text-white px-5 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition">
+                            Save Picture
+                        </button>
+                    </div>
+                    <div id="profile-picture-status" class="mt-3 text-xs font-semibold text-gray-400"></div>
+                </div>
             </div>
 
-            <!-- ═══ FAVOURITES TAB ═══ -->
+            <!-- Profile Tabs -->
+            <div class="flex border-b border-gray-200 mb-8 overflow-x-auto">
+                <button onclick="switchTab('favourites')" id="tab-favourites" class="px-8 py-4 tab-active whitespace-nowrap">Favourites</button>
+                <button onclick="switchTab('playlists')"  id="tab-playlists"  class="px-8 py-4 text-gray-400 whitespace-nowrap">Playlists</button>
+                <button onclick="switchTab('notes')"      id="tab-notes"      class="px-8 py-4 text-gray-400 whitespace-nowrap">Notes</button>
+                <button onclick="switchTab('watched')"    id="tab-watched"    class="px-8 py-4 text-gray-400 whitespace-nowrap">Watch statistics</button>
+            </div>
+
+            <!-- favourites tab -->
             <div id="content-favourites">
                 <div id="favourites-loading" class="space-y-3">
                     <div class="skeleton h-20 w-full"></div>
@@ -110,14 +168,14 @@
                     <div class="skeleton h-20 w-full"></div>
                 </div>
                 <div id="favourites-empty" class="hidden text-center py-16">
-                    <div class="text-4xl mb-3">💔</div>
+                    <div class="text-4xl mb-3"></div>
                     <p class="font-bold text-gray-500">No favourites yet</p>
-                    <p class="text-sm text-gray-400 mt-1">Hit the ❤️ button on any episode to save it here.</p>
+                    <p class="text-sm text-gray-400 mt-1">Hit the favourite button on any episode to save it here.</p>
                 </div>
                 <div id="favourites-list" class="hidden space-y-3"></div>
             </div>
 
-            <!-- ═══ PLAYLISTS TAB ═══ -->
+            <!-- playlists tab -->
             <div id="content-playlists" class="hidden">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-xl font-bold">My Playlists</h3>
@@ -128,14 +186,14 @@
                     <div class="skeleton h-24 w-full"></div>
                 </div>
                 <div id="playlists-empty" class="hidden text-center py-16">
-                    <div class="text-4xl mb-3">📋</div>
+                    <div class="text-4xl mb-3"></div>
                     <p class="font-bold text-gray-500">No playlists yet</p>
                     <p class="text-sm text-gray-400 mt-1">Create a playlist to organise episodes your way.</p>
                 </div>
                 <div id="playlists-list" class="hidden space-y-4"></div>
             </div>
 
-            <!-- ═══ NOTES TAB ═══ -->
+            <!-- notes tab -->
             <div id="content-notes" class="hidden">
                 <!-- Filter bar -->
                 <div class="bg-gray-100 p-4 rounded-xl mb-6 flex flex-wrap gap-3 items-center">
@@ -149,17 +207,53 @@
                     <div class="skeleton h-28 w-full"></div>
                 </div>
                 <div id="notes-empty" class="hidden text-center py-16">
-                    <div class="text-4xl mb-3">📝</div>
+                    <div class="text-4xl mb-3"></div>
                     <p class="font-bold text-gray-500">No notes yet</p>
                     <p class="text-sm text-gray-400 mt-1">Open any episode and write your thoughts in the notes section.</p>
                 </div>
                 <div id="notes-list" class="hidden space-y-4"></div>
             </div>
 
+            <!-- watched tab -->
+            <div id="content-watched" class="hidden">
+                <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-6">
+                    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-5">
+                        <div>
+                            <h3 class="text-xl font-black text-blue-900">Watched Episodes</h3>
+                            <p class="text-sm text-gray-500 mt-1"></p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="setWatchedScope('all')" id="watched-scope-all" class="watched-scope-btn px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-900 text-white">All</button>
+                            <button onclick="setWatchedScope('Classic')" id="watched-scope-Classic" class="watched-scope-btn px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-500">Classic</button>
+                            <button onclick="setWatchedScope('Modern')" id="watched-scope-Modern" class="watched-scope-btn px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-500">Modern</button>
+                            <button onclick="setWatchedScope('New')" id="watched-scope-New" class="watched-scope-btn px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-500">New</button>
+                        </div>
+                    </div>
+                    <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                        <div id="watched-progress-bar" class="h-full rounded-full bg-blue-900 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div class="flex items-center justify-between gap-4 mt-3 text-xs font-bold uppercase tracking-widest text-gray-400">
+                        <span id="watched-summary"></span>
+                        <span id="watched-percent-label">0%</span>
+                    </div>
+                    <p id="watched-summary" class="text-sm text-gray-500 mt-3"></p>
+                </div>
+                <div id="watched-loading" class="space-y-3">
+                    <div class="skeleton h-20 w-full"></div>
+                    <div class="skeleton h-20 w-full"></div>
+                    <div class="skeleton h-20 w-full"></div>
+                </div>
+                <div id="watched-empty" class="hidden text-center py-16">
+                    <p class="font-bold text-gray-500">No watched episodes yet</p>
+                    <p class="text-sm text-gray-400 mt-1">Use the watched button on an episode to build this list.</p>
+                </div>
+                <div id="watched-list" class="hidden space-y-3"></div>
+            </div>
+
         </div>
     </main>
 
-    <!-- ── Create Playlist Modal ── -->
+    <!-- create playlist modal -->
     <div id="modal-create-playlist" class="modal-backdrop hidden">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
             <h3 class="text-lg font-black text-blue-900 mb-6">New Playlist</h3>
@@ -171,9 +265,9 @@
                         class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description <span class="font-normal normal-case">(optional)</span></label>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Description <span class="font-normal normal-case"></span></label>
                     <textarea id="new-playlist-desc" rows="2" maxlength="300"
-                        placeholder="A short description..."
+                        placeholder="Description (optional)"
                         class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition resize-none"></textarea>
                 </div>
                 <div id="modal-pl-error" class="hidden text-xs text-red-600 font-semibold"></div>
@@ -185,10 +279,10 @@
         </div>
     </div>
 
-    <!-- ── Delete Playlist Confirm Modal ── -->
+    <!-- delete playlist confirm modal -->
     <div id="modal-delete-playlist" class="modal-backdrop hidden">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
-            <div class="text-4xl mb-4">🗑️</div>
+            <div class="text-4xl mb-4"></div>
             <h3 class="text-lg font-black text-gray-900 mb-2">Delete Playlist?</h3>
             <p id="delete-playlist-name" class="text-sm text-gray-500 mb-6"></p>
             <div class="flex gap-3">
@@ -198,7 +292,7 @@
         </div>
     </div>
 
-    <!-- ── Edit Note Modal ── -->
+    <!-- edit note modal -->
     <div id="modal-edit-note" class="modal-backdrop hidden">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8">
             <h3 id="edit-note-title" class="text-lg font-black text-blue-900 mb-4">Edit Note</h3>
@@ -214,13 +308,125 @@
     <script>
         const API = 'http://localhost:5000/api';
 
-        // ── Auth helpers ──────────────────────────────────────────────
+        // auth helpers
         function getToken() { return localStorage.getItem('ga_token'); }
         function getUser()  {
             try { return JSON.parse(localStorage.getItem('ga_user')); } catch { return null; }
         }
+        // build auth headers with jwt token
         function authHeaders() {
             return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
+        }
+
+        let avatarEditorOutsideHandler = null;
+
+        function openAvatarEditor() {
+            document.getElementById('avatar-editor').classList.remove('hidden');
+            const field = document.getElementById('profile-picture-url');
+            if (field) field.focus();
+
+            if (avatarEditorOutsideHandler) {
+                document.removeEventListener('click', avatarEditorOutsideHandler);
+            }
+            avatarEditorOutsideHandler = (event) => {
+                const editor = document.getElementById('avatar-editor');
+                const shell = document.getElementById('avatar-shell');
+                if (!editor || editor.classList.contains('hidden')) return;
+                if (editor.contains(event.target) || shell.contains(event.target)) return;
+                closeAvatarEditor();
+            };
+            document.addEventListener('click', avatarEditorOutsideHandler);
+        }
+
+        function closeAvatarEditor() {
+            document.getElementById('avatar-editor').classList.add('hidden');
+            if (avatarEditorOutsideHandler) {
+                document.removeEventListener('click', avatarEditorOutsideHandler);
+                avatarEditorOutsideHandler = null;
+            }
+        }
+
+        function clearProfilePictureStatus(message) {
+            const status = document.getElementById('profile-picture-status');
+            if (status) status.textContent = message || '';
+        }
+
+        function applyAvatar(url, fallbackLetter) {
+            const avatar = document.getElementById('avatar');
+            if (!avatar) return;
+
+            const trimmed = url ? String(url).trim() : '';
+            avatar.dataset.avatarUrl = trimmed;
+
+            if (!trimmed) {
+                avatar.style.backgroundImage = 'none';
+                avatar.style.backgroundColor = '#003b6f';
+                avatar.textContent = fallbackLetter;
+                return;
+            }
+
+            avatar.textContent = '';
+            avatar.style.backgroundColor = '#003b6f';
+            avatar.style.backgroundImage = `url("${trimmed.replace(/"/g, '\\"')}")`;
+
+            const imageTester = new Image();
+            imageTester.onload = () => {
+                if (avatar.dataset.avatarUrl !== trimmed) return;
+                avatar.style.backgroundImage = `url("${trimmed.replace(/"/g, '\\"')}")`;
+                avatar.style.backgroundColor = 'transparent';
+            };
+            imageTester.onerror = () => {
+                if (avatar.dataset.avatarUrl !== trimmed) return;
+                avatar.style.backgroundImage = 'none';
+                avatar.style.backgroundColor = '#003b6f';
+                avatar.textContent = fallbackLetter;
+                clearProfilePictureStatus('That link could not be loaded as an image. Use a direct .jpg, .png, or similar image URL.');
+            };
+            imageTester.src = trimmed;
+        }
+
+        async function saveProfilePicture() {
+            const status = document.getElementById('profile-picture-status');
+            const profile_picture_url = document.getElementById('profile-picture-url').value.trim();
+            const user = getUser();
+            const initial = user && user.username ? user.username.charAt(0).toUpperCase() : '?';
+
+            if (status) status.textContent = 'Saving...';
+
+            try {
+                if (profile_picture_url) {
+                    await new Promise((resolve, reject) => {
+                        const tester = new Image();
+                        tester.onload = resolve;
+                        tester.onerror = () => reject(new Error('That link does not point directly to an image. Use an image URL, not a Pinterest page link.'));
+                        tester.src = profile_picture_url;
+                    });
+                }
+
+                const res = await fetch(`${API}/auth/me`, {
+                    method: 'PUT',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ profile_picture_url: profile_picture_url || null })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Could not save profile picture');
+                }
+
+                localStorage.setItem('ga_user', JSON.stringify(data.user));
+                applyAvatar(data.user.profile_picture_url, initial);
+                document.getElementById('profile-picture-url').value = data.user.profile_picture_url || '';
+                closeAvatarEditor();
+                if (status) status.textContent = 'Profile picture saved.';
+            } catch (err) {
+                if (status) status.textContent = err.message || 'Could not save profile picture.';
+            }
+        }
+
+        async function clearProfilePicture() {
+            document.getElementById('profile-picture-url').value = '';
+            await saveProfilePicture();
         }
         function doLogout() {
             localStorage.removeItem('ga_token');
@@ -228,7 +434,7 @@
             window.location.href = 'login.html';
         }
 
-        // ── Toast ─────────────────────────────────────────────────────
+        // toast notifications
         function showToast(msg, duration = 2500) {
             const t = document.getElementById('toast');
             t.textContent = msg;
@@ -236,8 +442,9 @@
             setTimeout(() => t.classList.remove('show'), duration);
         }
 
-        // ── Tab switching ─────────────────────────────────────────────
-        const TABS = ['favourites', 'playlists', 'notes'];
+        // tab switching
+        const TABS = ['favourites', 'playlists', 'notes', 'watched'];
+        let currentWatchedScope = 'all';
         function switchTab(name) {
             TABS.forEach(t => {
                 document.getElementById('content-' + t).classList.add('hidden');
@@ -245,9 +452,12 @@
             });
             document.getElementById('content-' + name).classList.remove('hidden');
             document.getElementById('tab-' + name).className = 'px-8 py-4 tab-active whitespace-nowrap';
+            if (name === 'watched') {
+                loadWatched(currentWatchedScope);
+            }
         }
 
-        // ── Render helpers ────────────────────────────────────────────
+        // render helpers for episode labels and badges
         function episodeLabel(ep) {
             const parts = [];
             if (ep.season_number) parts.push(`S${ep.season_number}`);
@@ -268,7 +478,7 @@
                 : '';
         }
 
-        // ── Load profile data ─────────────────────────────────────────
+        // load profile data
         let allNotes = [];  // cache for filtering
 
         async function loadProfile() {
@@ -278,10 +488,14 @@
                 return;
             }
 
-            // Verify token is still valid
+            // Verify token is still valid and refresh the stored profile data
+            let serverUser = null;
             try {
                 const meRes = await fetch(`${API}/auth/me`, { headers: authHeaders() });
                 if (!meRes.ok) throw new Error('invalid token');
+                const meData = await meRes.json();
+                serverUser = meData.user;
+                localStorage.setItem('ga_user', JSON.stringify(serverUser));
             } catch {
                 doLogout();
                 return;
@@ -289,10 +503,11 @@
 
             document.getElementById('profile-content').classList.remove('hidden');
 
-            const user = getUser();
+            const user = serverUser || getUser();
             if (user) {
                 document.getElementById('profile-username').textContent = user.username;
-                document.getElementById('avatar').textContent = user.username.charAt(0).toUpperCase();
+                document.getElementById('profile-picture-url').value = user.profile_picture_url || '';
+                applyAvatar(user.profile_picture_url, user.username.charAt(0).toUpperCase());
                 const since = new Date(user.created_at);
                 document.getElementById('profile-since').textContent =
                     `Member since ${since.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}`;
@@ -302,7 +517,7 @@
             await Promise.all([loadFavourites(), loadPlaylists(), loadNotes()]);
         }
 
-        // ── FAVOURITES ────────────────────────────────────────────────
+        // favourites section
         async function loadFavourites() {
             try {
                 const favs = await fetch(`${API}/favourites`, { headers: authHeaders() }).then(r => r.json());
@@ -365,7 +580,7 @@
             }
         }
 
-        // ── PLAYLISTS ─────────────────────────────────────────────────
+        // playlists section
         let deletePlaylistId = null;
 
         async function loadPlaylists() {
@@ -422,6 +637,7 @@
             `).join('');
         }
 
+        // track which playlist panels are currently expanded
         const openPlaylistPanels = new Set();
 
         async function togglePlaylistEpisodes(playlistId) {
@@ -546,7 +762,7 @@
             }
         }
 
-        // ── NOTES ─────────────────────────────────────────────────────
+        // notes section
         let editingEpisodeId = null;
 
         async function loadNotes() {
@@ -609,6 +825,89 @@
             ));
         }
 
+        // watched section
+        function setWatchedScope(scope) {
+            currentWatchedScope = scope;
+            document.querySelectorAll('.watched-scope-btn').forEach(btn => {
+                const isActive = btn.id === `watched-scope-${scope}`;
+                btn.className = isActive
+                    ? 'watched-scope-btn px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-900 text-white'
+                    : 'watched-scope-btn px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-500';
+            });
+            loadWatched(scope);
+        }
+
+        function watchedScopeLabel(scope) {
+            return scope === 'all' ? 'all episodes' : `${scope} episodes`;
+        }
+
+        async function loadWatched(scope = currentWatchedScope) {
+            currentWatchedScope = scope;
+            document.getElementById('watched-loading').classList.remove('hidden');
+            document.getElementById('watched-empty').classList.add('hidden');
+            document.getElementById('watched-list').classList.add('hidden');
+            try {
+                const data = await fetch(`${API}/watched?tab=${encodeURIComponent(scope)}`, { headers: authHeaders() }).then(r => r.json());
+
+                document.getElementById('watched-loading').classList.add('hidden');
+
+                const watchedCount = data.stats?.watched_count || 0;
+                const totalCount = data.stats?.total_count || 0;
+                const percentage = data.stats?.percentage || 0;
+
+                document.getElementById('watched-percent-label').textContent = `${percentage}%`;
+                document.getElementById('watched-progress-bar').style.width = `${percentage}%`;
+                document.getElementById('watched-summary').textContent = `${watchedCount} of ${totalCount} episodes watched`;
+
+                if (!data.episodes || data.episodes.length === 0) {
+                    document.getElementById('watched-list').classList.add('hidden');
+                    document.getElementById('watched-empty').classList.remove('hidden');
+                    return;
+                }
+
+                document.getElementById('watched-empty').classList.add('hidden');
+                const list = document.getElementById('watched-list');
+                list.classList.remove('hidden');
+                list.innerHTML = data.episodes.map(ep => `
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 flex items-start gap-4 hover:shadow-md transition group" data-watched-id="${ep.episode_id}">
+                        <div class="flex-1 min-w-0">
+                            <a href="episode.html?id=${ep.episode_id}" class="font-black text-blue-900 hover:underline text-base leading-tight block truncate">
+                                ${ep.episode_title}
+                            </a>
+                            <p class="text-xs text-gray-400 mt-1 font-semibold">${episodeLabel(ep)}</p>
+                            <p class="text-[10px] font-black text-gray-300 uppercase mt-2">Watched ${new Date(ep.watched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                            <div class="flex gap-2 mt-2">${ratingBadge(ep)}${missingBadge(ep)}</div>
+                        </div>
+                        <button onclick="removeWatched(${ep.episode_id}, this)"
+                            class="text-blue-900 hover:text-blue-700 transition p-2 rounded-lg hover:bg-blue-50 opacity-0 group-hover:opacity-100 flex-shrink-0"
+                            title="Mark as unwatched">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </button>
+                    </div>
+                `).join('');
+            } catch {
+                document.getElementById('watched-loading').classList.add('hidden');
+                document.getElementById('watched-list').classList.remove('hidden');
+                document.getElementById('watched-list').innerHTML = '<p class="text-sm text-red-500 text-center py-8">Could not load watched episodes.</p>';
+            }
+        }
+
+        async function removeWatched(episodeId, btn) {
+            try {
+                await fetch(`${API}/watched/${episodeId}`, { method: 'DELETE', headers: authHeaders() });
+                const card = btn.closest('[data-watched-id]');
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.97)';
+                card.style.transition = 'all 0.2s ease';
+                setTimeout(() => loadWatched(currentWatchedScope), 220);
+                showToast('Removed from watched');
+            } catch {
+                showToast('Could not update watched list');
+            }
+        }
+
         function openEditNoteModal(episodeId, title, btn) {
             editingEpisodeId = episodeId;
             const card = btn.closest('[data-note-id]');
@@ -664,7 +963,7 @@
             document.getElementById('stat-notes').textContent = `${allNotes.length} Note${allNotes.length !== 1 ? 's' : ''}`;
         }
 
-        // ── Utils ─────────────────────────────────────────────────────
+        // utility functions
         function escapeHtml(str) {
             return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
@@ -672,7 +971,7 @@
             return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         }
 
-        // ── Close modals on backdrop click ────────────────────────────
+        // close modals on backdrop click
         document.getElementById('modal-create-playlist').addEventListener('click', function(e) {
             if (e.target === this) closeCreatePlaylistModal();
         });
@@ -683,7 +982,7 @@
             if (e.target === this) closeEditNoteModal();
         });
 
-        // ── Boot ──────────────────────────────────────────────────────
+        // initialization
         window.onload = loadProfile;
     </script>
 </body>
