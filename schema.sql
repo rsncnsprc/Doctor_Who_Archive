@@ -1,7 +1,3 @@
---
--- PostgreSQL database dump
---
-
 \restrict 8eaU4ILQbxDf70Bmp1AVrlBPpTaEJKC5NULWM0ram5hKSzPJwhJZZLIgCR6MtzC
 
 -- Dumped from database version 18.3
@@ -23,10 +19,7 @@ SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
---
 -- Name: episodes; Type: TABLE; Schema: public; Owner: postgres
---
-
 CREATE TABLE public.episodes (
     episode_id integer NOT NULL,
     season_id integer NOT NULL,
@@ -45,13 +38,9 @@ CREATE TABLE public.episodes (
     plot_summary text
 );
 
-
 ALTER TABLE public.episodes OWNER TO postgres;
 
---
 -- Name: episodes_episode_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
 CREATE SEQUENCE public.episodes_episode_id_seq
     AS integer
     START WITH 1
@@ -63,30 +52,19 @@ CREATE SEQUENCE public.episodes_episode_id_seq
 
 ALTER SEQUENCE public.episodes_episode_id_seq OWNER TO postgres;
 
---
 -- Name: episodes_episode_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
 ALTER SEQUENCE public.episodes_episode_id_seq OWNED BY public.episodes.episode_id;
 
-
---
 -- Name: seasons; Type: TABLE; Schema: public; Owner: postgres
---
-
 CREATE TABLE public.seasons (
     season_id integer NOT NULL,
     series_id integer NOT NULL,
     season_number integer NOT NULL
 );
 
-
 ALTER TABLE public.seasons OWNER TO postgres;
 
---
 -- Name: seasons_season_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
 CREATE SEQUENCE public.seasons_season_id_seq
     AS integer
     START WITH 1
@@ -98,17 +76,10 @@ CREATE SEQUENCE public.seasons_season_id_seq
 
 ALTER SEQUENCE public.seasons_season_id_seq OWNER TO postgres;
 
---
 -- Name: seasons_season_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
 ALTER SEQUENCE public.seasons_season_id_seq OWNED BY public.seasons.season_id;
 
-
---
 -- Name: series; Type: TABLE; Schema: public; Owner: postgres
---
-
 CREATE TABLE public.series (
     series_id integer NOT NULL,
     series_name character varying(20) NOT NULL
@@ -117,10 +88,8 @@ CREATE TABLE public.series (
 
 ALTER TABLE public.series OWNER TO postgres;
 
---
--- Name: series_series_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
 
+-- Name: series_series_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 CREATE SEQUENCE public.series_series_id_seq
     AS integer
     START WITH 1
@@ -132,38 +101,19 @@ CREATE SEQUENCE public.series_series_id_seq
 
 ALTER SEQUENCE public.series_series_id_seq OWNER TO postgres;
 
---
 -- Name: series_series_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
 ALTER SEQUENCE public.series_series_id_seq OWNED BY public.series.series_id;
 
-
---
 -- Name: episodes episode_id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
 ALTER TABLE ONLY public.episodes ALTER COLUMN episode_id SET DEFAULT nextval('public.episodes_episode_id_seq'::regclass);
 
-
---
 -- Name: seasons season_id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
 ALTER TABLE ONLY public.seasons ALTER COLUMN season_id SET DEFAULT nextval('public.seasons_season_id_seq'::regclass);
 
-
---
 -- Name: series series_id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
 ALTER TABLE ONLY public.series ALTER COLUMN series_id SET DEFAULT nextval('public.series_series_id_seq'::regclass);
 
-
---
 -- Data for Name: episodes; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
 COPY public.episodes (episode_id, season_id, episode_identifier, episode_title, story_title, doctor_num, year_released, companions, episode_mood, is_missing, vibe_tags, villains, setting, imdb_rating, plot_summary) FROM stdin;
 1	22	1	Rose	Rose	9	2006	Rose	Emotional Reunion	f	Dark, Mysterious, Urban	Autons	London, Past, 2006	7.5	When ordinary shop-worker Rose Tyler meets a mysterious stranger called the Doctor she is drawn into his strange and dangerous world; her life will never be the same again.
 2	22	2	The End of the World	The End of the World	9	2006	Rose	Bittersweet	f	Futuristic, Mysterious, Apocalyptic	Lady Cassandra	Space Station, Future	7.5	The Doctor takes Rose on her first voyage through time, to the year five billion and the end of planet Earth.
