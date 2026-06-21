@@ -25,48 +25,6 @@ for col in target_cols:
     if col in df.columns:
         df[col] = df[col].astype(object)
 
-# IMDB CODE DOES NOT WORK PROPERLY IGNORE BUT SAVED JUST IN CASE
-
-# def get_imdb_data(title, year=None, season=None, episode=None):
-#     clean_title = str(title).replace('æ', 'ae').replace('Æ', 'AE')
-#     safe_title = urllib.parse.quote(clean_title)
-    
-#     # 1. Determine which "Doctor Who" show it is based on the year
-#     series_id = None
-#     if year:
-#         year_int = int(year)
-#         if year_int < 2005:
-#             series_id = "tt0056746"  # Classic
-#         elif 2005 <= year_int <= 2022:
-#             series_id = "tt0436992"  # New Who
-#         else:
-#             series_id = "tt28236746" # Modern (2023+)
-
-#     # 2. Try searching by Series ID + Season + Episode (Best for accuracy)
-#     if series_id and season and episode:
-#         url = f"http://www.omdbapi.com/?i={series_id}&Season={season}&Episode={episode}&apikey={OMDB_KEY}"
-#     else:
-#         # 3. Fallback: Search by Title + Year
-#         url = f"http://www.omdbapi.com/?t={safe_title}&y={year}&plot=full&apikey={OMDB_KEY}"
-
-#     try:
-#         response = requests.get(url)
-#         data = response.json()
-        
-#         if data.get("Response") == "True":
-#             return data.get("imdbRating"), data.get("Plot")
-        
-#         # 4. Last Ditch Effort: Just search the title with "Doctor Who" prefix
-#         url_final = f"http://www.omdbapi.com/?t=Doctor Who {safe_title}&plot=full&apikey={OMDB_KEY}"
-#         data = requests.get(url_final).json()
-#         if data.get("Response") == "True":
-#             return data.get("imdbRating"), data.get("Plot")
-
-#     except Exception as e:
-#         print(f"OMDb Error on {title}: {e}")
-    
-#     return "N/A", "N/A"
-
 def get_groq_vibes(row):
     prompt = f"""
     Doctor Who Story: {row['story_title']}. Doctor: {row['doctor_num']}.
